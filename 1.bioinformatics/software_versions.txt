@@ -1,0 +1,39 @@
+Software and database versions used for the metatranscriptomics workflow
+=====================================================================
+
+HPC context
+-----------
+- fastp through Bracken were run using the default available NeSI module versions listed below.
+- HUMAnN4, MetaPhlAn4, and DIAMOND were run from the project Conda environment used for HUMAnN4 functional profiling.
+
+Read QC and trimming
+--------------------
+- fastp/1.1.0-GCC-12.3.0
+- cutadapt/5.2-foss-2023a-Python-3.11.6
+- FastQC/0.12.1
+- MultiQC/1.24.1-foss-2023a-Python-3.11.6
+
+Host-read removal
+-----------------
+- Bowtie2/2.5.4-GCC-12.3.0
+- SAMtools/1.23.1-GCC-12.3.0
+
+Taxonomic profiling
+-------------------
+- Kraken2/2.1.6-GCC-12.3.0
+- Bracken/2.7-GCC-11.3.0
+
+Functional profiling
+--------------------
+- HUMAnN4 v4.0.0.alpha.1
+- MetaPhlAn4 v4.1.1
+- DIAMOND v2.1.14
+
+Databases
+---------
+- MetaPhlAn database: mpa_vJan25_CHOCOPhlAnSGB_202503
+- MetaPhlAn index: mpa_vJan25_CHOCOPhlAnSGB_202503
+- HUMAnN expected MetaPhlAn database label used in workflow: vOct22_CHOCOPhlAnSGB_202403
+- HUMAnN nucleotide database: ChocoPhlAn full database
+- HUMAnN protein database: UniRef90 EC-filtered DIAMOND database (uniref90_ec_filtered_diamond)
+- HUMAnN utility mapping database: full utility_mapping database

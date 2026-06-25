@@ -1,0 +1,11 @@
+fastp/1.1.0-GCC-12.3.0
+cutadapt/5.2-foss-2023a-Python-3.11.6
+FastQC/0.12.1
+MultiQC/1.24.1-foss-2023a-Python-3.11.6
+Bowtie2/2.5.4-GCC-12.3.0
+SAMtools/1.23.1-GCC-12.3.0
+Kraken2/2.1.6-GCC-12.3.0
+Bracken/2.7-GCC-11.3.0
+MetaPhlAn4 v4.1.1
+HUMAnN4 v4.0.0.alpha.1
+DIAMOND v2.1.14

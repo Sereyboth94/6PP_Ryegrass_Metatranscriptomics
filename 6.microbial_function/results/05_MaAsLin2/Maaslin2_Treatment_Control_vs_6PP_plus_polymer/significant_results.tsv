@@ -1,0 +1,7 @@
+feature	metadata	value	coef	stderr	N	N.not.0	pval	qval
+FAO.PWY..fatty.acid..beta..oxidation.I..generic.	Treatment	6-PP	0.117379948363727	0.0375277146850071	64	64	0.00268215387559572	0.24212205301329
+PWY.5138..fatty.acid..beta..oxidation.IV..unsaturated..even.number.	Treatment	6-PP	0.117527941596192	0.0382779574734567	64	64	0.00317140303747703	0.24212205301329
+PWY.6435..4.hydroxybenzoate.biosynthesis.III..plants.	Treatment	6-PP	0.126833942839513	0.040453531023768	64	64	0.00262391560942086	0.24212205301329
+PWY.6837..fatty.acid..beta..oxidation.V..unsaturated..odd.number..di.isomerase.dependent.	Treatment	6-PP	0.131440245779954	0.0425052536076135	64	64	0.00297536604276389	0.24212205301329
+PWY.7117..C4.photosynthetic.carbon.assimilation.cycle..PEPCK.type	Treatment	6-PP	-0.158374950217817	0.0497609964548314	64	64	0.00228141189851558	0.24212205301329
+PWY66.409..superpathway.of.purine.nucleotide.salvage	Treatment	6-PP	-0.953489176481973	0.312359621585324	64	44	0.00333961452432124	0.24212205301329

@@ -1,0 +1,9 @@
+Intercept
+Ryegrass_AR37_vs_Nil
+Harvest_Post.Drought_vs_During.Drought
+Water_Drought_vs_Irrigated
+Treatment_Polymer_vs_Control
+Treatment_6.PP_vs_Control
+WaterDrought.TreatmentPolymer
+WaterDrought.Treatment6.PP
+RyegrassAR37.WaterDrought
