@@ -1,3 +1,93 @@
+# ============================================================================
+# Larger labels for the final, assembled manuscript figure
+# Layout revision: 2026-10-12 (wider exports, explicit ticks and edge padding)
+# Text sizes retain the previous export calibration as the canvas widens.
+# The PDF, PNG and LZW-compressed TIFF use the same layout; rasters use 600 dpi.
+# Change MANUSCRIPT_FONT_SCALE to 1.10 for a further 10% increase.
+# MANUSCRIPT_PROJECT_ROOT optionally overrides the original Windows project path.
+# ============================================================================
+FIGURE_DISPLAY_WIDTH_IN <- as.numeric(Sys.getenv("MANUSCRIPT_FIGURE_WIDTH_IN", "6.27"))
+FIGURE_EXPORT_WIDTH_IN <- as.numeric(Sys.getenv("MANUSCRIPT_EXPORT_WIDTH_IN", "8.0"))
+# Keep the previous exported text and symbol sizes as the canvas widens.
+FIGURE_REFERENCE_WIDTH_IN <- 7.1
+FIGURE_EXPORT_HEIGHT_IN <- 7.4
+FIGURE_REVISION <- "2026-10-12 wider-export update"
+message("Figure 4: ", FIGURE_REVISION)
+FIGURE_FONT_SCALE <- as.numeric(Sys.getenv("MANUSCRIPT_FONT_SCALE", "1.0"))
+# Reduce points and line keys by 20%; text remains independently sized.
+FIGURE_SYMBOL_SCALE <- as.numeric(Sys.getenv("MANUSCRIPT_SYMBOL_SCALE", "0.80"))
+
+if (any(!is.finite(c(FIGURE_EXPORT_WIDTH_IN, FIGURE_DISPLAY_WIDTH_IN, FIGURE_FONT_SCALE, FIGURE_SYMBOL_SCALE))) ||
+    any(c(FIGURE_EXPORT_WIDTH_IN, FIGURE_DISPLAY_WIDTH_IN, FIGURE_FONT_SCALE, FIGURE_SYMBOL_SCALE) <= 0)) {
+  stop("Export width, manuscript width, font scale and symbol scale must be positive numbers.")
+}
+
+FIGURE_TEXT <- list(
+  axis = 9, axis_title = 9.5, facet = 8.5,
+  legend = 8, legend_title = 8.5,
+  subtitle = 9, panel = 12, annotation = 8.5, dense = 8
+)
+
+# Themes use points; geom_text/geom_label use millimetres.
+figure_pt <- function(pt) {
+  pt * FIGURE_FONT_SCALE * FIGURE_REFERENCE_WIDTH_IN / FIGURE_DISPLAY_WIDTH_IN
+}
+figure_mm <- function(pt) figure_pt(pt) / (72.27 / 25.4)
+figure_symbol <- function(mm) {
+  mm * FIGURE_SYMBOL_SCALE * FIGURE_REFERENCE_WIDTH_IN / FIGURE_DISPLAY_WIDTH_IN
+}
+figure_subtitle <- function(x, width = 32) stringr::str_wrap(x, width = width)
+
+# Extract a single legend without reserving space inside the data panel.
+# Supports both the older guide-box and the newer position-specific guide boxes.
+figure_legend <- function(plot_obj, position = "bottom") {
+  table <- ggplot2::ggplotGrob(
+    plot_obj + ggplot2::theme(legend.position = position)
+  )
+  index <- which(table$layout$name == paste0("guide-box-", position))
+  if (!length(index)) index <- which(table$layout$name == "guide-box")
+  if (length(index)) {
+    index <- index[!vapply(table$grobs[index], inherits, logical(1), "zeroGrob")]
+  }
+  if (!length(index)) return(grid::nullGrob())
+  table$grobs[[index[1L]]]
+}
+
+save_manuscript_figure <- function(plot_obj, out_path, stem) {
+  dir.create(out_path, recursive = TRUE, showWarnings = FALSE)
+  stem <- paste0(stem, "_LargeLabels")
+  pdf_fp <- file.path(out_path, paste0(stem, ".pdf"))
+
+  # Cairo embeds the system fonts when this device is available.
+  if (isTRUE(capabilities("cairo"))) {
+    ggplot2::ggsave(
+      pdf_fp, plot_obj, device = grDevices::cairo_pdf,
+      width = FIGURE_EXPORT_WIDTH_IN, height = FIGURE_EXPORT_HEIGHT_IN,
+      units = "in", bg = "white", limitsize = FALSE
+    )
+  } else {
+    ggplot2::ggsave(
+      pdf_fp, plot_obj, device = grDevices::pdf, useDingbats = FALSE,
+      width = FIGURE_EXPORT_WIDTH_IN, height = FIGURE_EXPORT_HEIGHT_IN,
+      units = "in", bg = "white", limitsize = FALSE
+    )
+    message("Cairo is unavailable; used the standard PDF device for ", pdf_fp)
+  }
+
+  ggplot2::ggsave(
+    file.path(out_path, paste0(stem, ".png")), plot_obj,
+    width = FIGURE_EXPORT_WIDTH_IN, height = FIGURE_EXPORT_HEIGHT_IN,
+    units = "in", dpi = 600, bg = "white", limitsize = FALSE
+  )
+  ggplot2::ggsave(
+    file.path(out_path, paste0(stem, ".tiff")), plot_obj,
+    device = grDevices::tiff, compression = "lzw",
+    width = FIGURE_EXPORT_WIDTH_IN, height = FIGURE_EXPORT_HEIGHT_IN,
+    units = "in", dpi = 600, bg = "white", limitsize = FALSE
+  )
+  message("Saved larger-label PDF, PNG and 600-dpi TIFF to: ", out_path)
+}
+
 # ==========================================================
 # HUMAnN4 Pathway Analysis (Publication-ready version)
 # - Bray-Curtis + Aitchison beta diversity
@@ -27,7 +117,7 @@ library(Maaslin2)
 # =========================
 # Paths
 # =========================
-project_dir <- "C:/Users/soths/OneDrive - Lincoln University/Writing/NatMicro/github"
+project_dir <- Sys.getenv("MANUSCRIPT_PROJECT_ROOT", "C:/Users/soths/OneDrive - Lincoln University/Writing/NatMicro/github")
 
 data_dir <- file.path(project_dir, "6.microbial_function", "data")
 out_dir  <- file.path(project_dir, "6.microbial_function", "results")
@@ -987,18 +1077,32 @@ suppressPackageStartupMessages({
 fig4_dir <- file.path(project_dir, "7.manuscript_figure", "5.figure4")
 dir.create(fig4_dir, recursive = TRUE, showWarnings = FALSE)
 
-theme_natcom <- function(base_size = 15) {
-  theme_classic(base_size = base_size) +
+theme_natcom <- function(base_size = FIGURE_TEXT$axis) {
+  theme_classic(base_size = figure_pt(base_size), base_family = "sans") +
     theme(
-      axis.title = element_text(face = "bold", colour = "black"),
-      axis.text = element_text(colour = "black"),
+      axis.title = element_text(size = figure_pt(FIGURE_TEXT$axis_title),
+                                face = "bold", colour = "black"),
+      axis.text = element_text(size = figure_pt(FIGURE_TEXT$axis), colour = "black"),
       strip.background = element_rect(fill = "grey95", colour = "grey70"),
-      strip.text = element_text(face = "bold", colour = "black"),
-      legend.title = element_text(face = "bold"),
-      legend.text = element_text(colour = "black"),
-      plot.title = element_text(face = "bold", hjust = 0, size = base_size + 3),
-      plot.subtitle = element_text(face = "bold", hjust = 0, size = base_size - 1),
-      plot.margin = margin(8, 8, 8, 8)
+      strip.text = element_text(size = figure_pt(FIGURE_TEXT$facet),
+                                face = "bold", colour = "black"),
+      legend.title = element_text(size = figure_pt(FIGURE_TEXT$legend_title),
+                                  face = "bold"),
+      legend.text = element_text(size = figure_pt(FIGURE_TEXT$legend), colour = "black"),
+      legend.position = "bottom",
+      legend.direction = "horizontal",
+      legend.box = "vertical",
+      legend.key.size = unit(figure_pt(8), "pt"),
+      legend.spacing.y = unit(figure_pt(2), "pt"),
+      legend.box.spacing = unit(figure_pt(2), "pt"),
+      plot.title = element_text(size = figure_pt(FIGURE_TEXT$panel), face = "bold", hjust = 0),
+      plot.subtitle = element_text(size = figure_pt(FIGURE_TEXT$subtitle),
+                                   face = "bold", hjust = 0, lineheight = 1.05,
+                                   margin = margin(b = figure_pt(2))),
+      plot.title.position = "plot",
+      legend.margin = margin(0, 0, 0, 0),
+      panel.spacing = unit(figure_pt(4), "pt"),
+      plot.margin = margin(figure_pt(3), figure_pt(3), figure_pt(3), figure_pt(3))
     )
 }
 
@@ -1011,7 +1115,7 @@ panel_a <- ggplot(
   pcoa_scores,
   aes(x = PCoA1, y = PCoA2, colour = Treatment, shape = Water)
 ) +
-  geom_point(size = 3.8, alpha = 0.9) +
+  geom_point(size = figure_symbol(2.0), alpha = 0.9) +
   facet_wrap(~ Harvest, nrow = 1) +
   scale_colour_manual(values = c(
     "Control" = "#F8766D",
@@ -1020,13 +1124,13 @@ panel_a <- ggplot(
   )) +
   labs(
     title = "A",
-    subtitle = "HUMAnN4 pathway Bray-Curtis PCoA",
+    subtitle = "Pathway Bray–Curtis PCoA",
     x = paste0("PCoA1 (", pcoa_var1, "%)"),
     y = paste0("PCoA2 (", pcoa_var2, "%)"),
     colour = "Seed treatment",
     shape = "Water"
   ) +
-  theme_natcom(15)
+  theme_natcom()
 
 # Panel B — PERMANOVA variance explained including main effects, interactions, and residual
 
@@ -1105,8 +1209,9 @@ panel_b <- ggplot(
   perm_function_df,
   aes(x = R2, y = Term_clean, fill = significant)
 ) +
-  geom_col(width = 0.72) +
-  geom_text(aes(label = label), hjust = -0.12, size = 3.8) +
+  geom_col(width = 0.60) +
+  geom_text(aes(label = label), hjust = -0.12, size = figure_mm(8.5),
+            show.legend = FALSE) +
   scale_fill_manual(
     values = c(
       "Significant" = "#8A3FFC",
@@ -1116,22 +1221,26 @@ panel_b <- ggplot(
     drop = FALSE,
     name = NULL
   ) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0.18))) +
+  scale_x_continuous(n.breaks = 3, expand = expansion(mult = c(0, 0.40))) +
+  scale_y_discrete(labels = function(x) stringr::str_replace_all(x, c(
+    "Seed treatment" = "Treatment", "Water regime" = "Water",
+    "Harvest stage" = "Harvest", "Unexplained variance" = "Residual"
+  ))) +
   labs(
     title = "B",
-    subtitle = "Variance explained by PERMANOVA model terms",
-    x = expression(R^2~"(variance explained)"),
+    subtitle = "PERMANOVA",
+    x = expression(R^2),
     y = NULL
   ) +
-  theme_natcom(14) +
+  theme_natcom() +
   theme(
-    axis.text.y = element_text(size = 12, colour = "black"),
-    axis.text.x = element_text(size = 12, colour = "black"),
-    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.text.y = element_text(size = figure_pt(FIGURE_TEXT$axis), colour = "black"),
+    axis.text.x = element_text(size = figure_pt(FIGURE_TEXT$axis), colour = "black"),
+    axis.title.x = element_text(size = figure_pt(FIGURE_TEXT$axis_title), face = "bold"),
     legend.position = "right",
-    legend.text = element_text(size = 10),
-    plot.subtitle = element_text(size = 14, face = "bold"),
-    plot.margin = margin(8, 30, 8, 8)
+    legend.text = element_text(size = figure_pt(FIGURE_TEXT$legend)),
+    plot.subtitle = element_text(size = figure_pt(FIGURE_TEXT$subtitle), face = "bold"),
+    plot.margin = margin(figure_pt(4), figure_pt(14), figure_pt(4), figure_pt(4))
   )
 
 # Panel C — Focused energy/stress pathway activity
@@ -1317,27 +1426,36 @@ panel_c <- ggplot(
   aes(x = Treatment, y = Pathway_clean, size = abs_z, colour = mean_z)
 ) +
   geom_point(alpha = 0.9) +
-  facet_grid(Water ~ Harvest) +
+  facet_grid(Water ~ Harvest,
+    labeller = labeller(Harvest = c(
+      "During Drought" = "During drought", "Post Drought" = "Post drought"
+    ))) +
+  scale_y_discrete(labels = function(x) stringr::str_replace_all(x, c(
+    "Pyrimidine dNTP biosyn. from CTP" = "Pyrimidine dNTP from CTP",
+    "De novo pyrimidine dNTP biosyn." = "De novo pyrimidine dNTP",
+    "UTP/CTP dephosphorylation I" = "UTP/CTP dephosphoryl. I"
+  ))) +
   scale_colour_gradient2(
     low = "#2166AC",
     mid = "white",
     high = "#B2182B",
     midpoint = 0,
     limits = c(-1.5, 1.5),
+    breaks = c(-1.5, 0, 1.5),
     name = "Pathway Z"
   ) +
   scale_size_continuous(
     name = "|Z|",
-    range = c(2.8, 8.5),
+    range = figure_symbol(c(0.9, 2.5)),
     breaks = c(0.5, 1.0, 1.5)
   ) +
   labs(
     title = "C",
-    subtitle = "Central carbon and stress-response pathways",
+    subtitle = figure_subtitle("Central carbon and stress-response pathways"),
     x = "Seed treatment",
     y = NULL
   ) +
-  theme_natcom(16) +
+  theme_natcom() +
   
   theme(
     panel.grid.major.y = element_line(
@@ -1349,43 +1467,41 @@ panel_c <- ggplot(
     axis.text.x = element_text(
       angle = 35,
       hjust = 1,
-      size = 13
+      size = figure_pt(FIGURE_TEXT$axis)
     ),
     
     axis.text.y = element_text(
-      size = 14,
+      size = figure_pt(FIGURE_TEXT$axis),
       colour = "black"
     ),
     
     axis.title.x = element_text(
-      size = 15,
+      size = figure_pt(FIGURE_TEXT$axis_title),
       face = "bold"
     ),
     
     strip.text = element_text(
-      size = 15,
+      size = figure_pt(FIGURE_TEXT$facet),
       face = "bold"
     ),
     
     legend.title = element_text(
-      size = 15,
+      size = figure_pt(FIGURE_TEXT$legend_title),
       face = "bold"
     ),
     
     legend.text = element_text(
-      size = 14
+      size = figure_pt(FIGURE_TEXT$legend)
     ),
     
     plot.subtitle = element_text(
-      size = 14,
+      size = figure_pt(FIGURE_TEXT$subtitle),
       face = "bold"
     ),
     
     legend.position = "right",
     
-    plot.margin = margin(
-      8, 8, 8, 55
-    )
+    plot.margin = margin(figure_pt(3), figure_pt(3), figure_pt(3), figure_pt(3))
   )
 
 # Panel D — MaAsLin2 treatment-associated pathways
@@ -1491,95 +1607,132 @@ panel_d <- ggplot(
     mid = "white",
     high = "#B2182B",
     midpoint = 0,
+    breaks = scales::breaks_pretty(n = 3),
+    labels = function(x) format(signif(x, 2), trim = TRUE, scientific = FALSE),
     name = "Coefficient"
   ) +
   scale_size_continuous(
     name = expression(-log[10](q)),
-    range = c(1.8, 6.5)
+    breaks = scales::breaks_pretty(n = 3),
+    range = figure_symbol(c(0.8, 2.5))
   ) +
   labs(
     title = "D",
-    subtitle = "Differential metabolic pathways associated with seed treatment",
+    subtitle = figure_subtitle("Differential metabolic pathways associated with seed treatment"),
     x = NULL,
     y = NULL
   ) +
-  theme_natcom(15) +
+  theme_natcom() +
   
   theme(
     
     axis.text.x = element_text(
       angle = 30,
       hjust = 1,
-      size = 13,
+      size = figure_pt(FIGURE_TEXT$axis),
       colour = "black"
     ),
     
     axis.text.y = element_text(
-      size = 15,
+      size = figure_pt(FIGURE_TEXT$axis),
       colour = "black"
     ),
     
     axis.title = element_text(
-      size = 15,
+      size = figure_pt(FIGURE_TEXT$axis_title),
       face = "bold"
     ),
     
     strip.text = element_text(
-      size = 16,
+      size = figure_pt(FIGURE_TEXT$facet),
       face = "bold"
     ),
     
     legend.title = element_text(
-      size = 15,
+      size = figure_pt(FIGURE_TEXT$legend_title),
       face = "bold"
     ),
     
     legend.text = element_text(
-      size = 14
+      size = figure_pt(FIGURE_TEXT$legend)
     ),
     
     plot.subtitle = element_text(
-      size = 14,
+      size = figure_pt(FIGURE_TEXT$subtitle),
       face = "bold"
     ),
     
     plot.title = element_text(
-      size = 16,
+      size = figure_pt(FIGURE_TEXT$panel),
       face = "bold"
     ),
     
     legend.position = "right",
     
-    plot.margin = margin(8, 8, 8, 55)
+    plot.margin = margin(figure_pt(3), figure_pt(3), figure_pt(3), figure_pt(3))
     
   )
-top <- plot_grid(panel_a, panel_b, nrow = 1, rel_widths = c(1, 1))
-bottom <- plot_grid(panel_c, panel_d, nrow = 1, rel_widths = c(1.15, 1.0))
-
-fig4 <- plot_grid(
-  top,
-  bottom,
-  ncol = 1,
-  rel_heights = c(0.85, 1.35)
+# Restore A/B above C/D and the original Water-row/Harvest-column facets in C.
+# Compact legends occupy dedicated rows, instead of shrinking plot interiors.
+panel_a <- panel_a + labs(colour = "Treatment") + guides(
+  colour = guide_legend(nrow = 1, title.position = "left", order = 1),
+  shape = guide_legend(nrow = 1, title.position = "left", order = 2)
+) + theme(legend.box = "horizontal") +
+  scale_x_continuous(n.breaks = 3) + scale_y_continuous(n.breaks = 3)
+panel_b <- panel_b + labs(subtitle = "PERMANOVA") +
+  theme(legend.direction = "horizontal",
+    axis.text.y = element_text(size = figure_pt(FIGURE_TEXT$dense), lineheight = 0.95),
+    plot.margin = margin(figure_pt(3), figure_pt(3), figure_pt(3), figure_pt(3))) +
+  guides(fill = guide_legend(nrow = 1))
+legend_a <- figure_legend(panel_a)
+legend_b <- figure_legend(panel_b)
+top_body <- plot_grid(
+  panel_a + theme(legend.position = "none"),
+  panel_b + theme(legend.position = "none"),
+  nrow = 1, rel_widths = c(1.05, 1)
 )
+top <- plot_grid(top_body, legend_a, legend_b, ncol = 1,
+                 rel_heights = c(2.30, 0.30, 0.25))
 
-ggsave(
-  file.path(fig4_dir, "Figure4_NatCom_function.pdf"),
-  fig4,
-  width = 24,
-  height = 18,
-  useDingbats = FALSE,
-  limitsize = FALSE
-)
+panel_c <- panel_c + labs(subtitle = "Carbon and stress-response pathways", x = NULL) +
+  theme(legend.position = "bottom", legend.direction = "horizontal", legend.box = "horizontal",
+    axis.text.x = element_text(size = figure_pt(8), angle = 45, hjust = 1),
+    axis.text.y = element_text(size = figure_pt(7.5), lineheight = 0.95),
+    strip.text = element_text(size = figure_pt(8), face = "bold"),
+    panel.spacing.y = unit(figure_pt(6), "pt"),
+    plot.margin = margin(figure_pt(3), figure_pt(4), figure_pt(3), figure_pt(12))) +
+  guides(
+    colour = guide_colourbar(direction = "horizontal", title.position = "top", order = 1,
+      barwidth = unit(figure_pt(48), "pt"), barheight = unit(figure_pt(5), "pt")),
+    size = guide_legend(nrow = 1, title.position = "top", order = 2)
+  )
+legend_c <- figure_legend(panel_c)
 
-ggsave(
-  file.path(fig4_dir, "Figure4_NatCom_function.png"),
-  fig4,
-  width = 24,
-  height = 18,
-  dpi = 600,
-  limitsize = FALSE
+panel_d <- panel_d +
+  scale_x_discrete(labels = function(x) stringr::str_replace(x, " vs ", " vs\n")) +
+  labs(subtitle = "Treatment-associated pathways") +
+  theme(legend.position = "bottom", legend.direction = "horizontal", legend.box = "horizontal",
+    axis.text.x = element_text(size = figure_pt(7.5), angle = 45, hjust = 1),
+    axis.text.y = element_text(size = figure_pt(7.5), lineheight = 0.95)) +
+  guides(
+    colour = guide_colourbar(direction = "horizontal", title.position = "top", order = 1,
+      barwidth = unit(figure_pt(48), "pt"), barheight = unit(figure_pt(5), "pt")),
+    size = guide_legend(nrow = 1, title.position = "top", order = 2)
+  )
+legend_d <- figure_legend(panel_d)
+bottom_body <- plot_grid(
+  panel_c + theme(legend.position = "none"),
+  panel_d + theme(legend.position = "none"),
+  nrow = 1, rel_widths = c(1.10, 1)
 )
+bottom_legends <- plot_grid(legend_c, legend_d, nrow = 1, rel_widths = c(1.10, 1))
+bottom <- plot_grid(bottom_body, bottom_legends, ncol = 1,
+                    rel_heights = c(4.10, 0.45))
+fig4 <- plot_grid(top, bottom, ncol = 1, rel_heights = c(2.85, 4.55))
+
+save_manuscript_figure(fig4, fig4_dir, "Figure4_NatCom_function")
+
+
 
 message("Figure 4 saved to: ", fig4_dir)
 

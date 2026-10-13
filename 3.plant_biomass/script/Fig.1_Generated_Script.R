@@ -1,12 +1,105 @@
+# ============================================================================
+# Larger labels for the final, assembled manuscript figure
+# Layout revision: 2026-10-12 (wider exports, explicit ticks and edge padding)
+# Text sizes retain the previous export calibration as the canvas widens.
+# The PDF, PNG and LZW-compressed TIFF use the same layout; rasters use 600 dpi.
+# Change MANUSCRIPT_FONT_SCALE to 1.10 for a further 10% increase.
+# MANUSCRIPT_PROJECT_ROOT optionally overrides the original Windows project path.
+# ============================================================================
+FIGURE_DISPLAY_WIDTH_IN <- as.numeric(Sys.getenv("MANUSCRIPT_FIGURE_WIDTH_IN", "6.27"))
+FIGURE_EXPORT_WIDTH_IN <- as.numeric(Sys.getenv("MANUSCRIPT_EXPORT_WIDTH_IN", "8.0"))
+# Keep the previous exported text and symbol sizes as the canvas widens.
+FIGURE_REFERENCE_WIDTH_IN <- 7.5
+FIGURE_EXPORT_HEIGHT_IN <- 5.0
+FIGURE_REVISION <- "2026-10-12 wider-export update"
+message("Figure 1: ", FIGURE_REVISION)
+FIGURE_FONT_SCALE <- as.numeric(Sys.getenv("MANUSCRIPT_FONT_SCALE", "1.0"))
+# Reduce points and line keys by 20%; text remains independently sized.
+FIGURE_SYMBOL_SCALE <- as.numeric(Sys.getenv("MANUSCRIPT_SYMBOL_SCALE", "0.80"))
+
+if (any(!is.finite(c(FIGURE_EXPORT_WIDTH_IN, FIGURE_DISPLAY_WIDTH_IN, FIGURE_FONT_SCALE, FIGURE_SYMBOL_SCALE))) ||
+    any(c(FIGURE_EXPORT_WIDTH_IN, FIGURE_DISPLAY_WIDTH_IN, FIGURE_FONT_SCALE, FIGURE_SYMBOL_SCALE) <= 0)) {
+  stop("Export width, manuscript width, font scale and symbol scale must be positive numbers.")
+}
+
+FIGURE_TEXT <- list(
+  axis = 9, axis_title = 9.5, facet = 8.5,
+  legend = 8, legend_title = 8.5,
+  subtitle = 9, panel = 12, annotation = 8.5, dense = 8
+)
+
+# Themes use points; geom_text/geom_label use millimetres.
+figure_pt <- function(pt) {
+  pt * FIGURE_FONT_SCALE * FIGURE_REFERENCE_WIDTH_IN / FIGURE_DISPLAY_WIDTH_IN
+}
+figure_mm <- function(pt) figure_pt(pt) / (72.27 / 25.4)
+figure_symbol <- function(mm) {
+  mm * FIGURE_SYMBOL_SCALE * FIGURE_REFERENCE_WIDTH_IN / FIGURE_DISPLAY_WIDTH_IN
+}
+figure_subtitle <- function(x, width = 32) stringr::str_wrap(x, width = width)
+
+# Extract a single legend without reserving space inside the data panel.
+# Supports both the older guide-box and the newer position-specific guide boxes.
+figure_legend <- function(plot_obj, position = "bottom") {
+  table <- ggplot2::ggplotGrob(
+    plot_obj + ggplot2::theme(legend.position = position)
+  )
+  index <- which(table$layout$name == paste0("guide-box-", position))
+  if (!length(index)) index <- which(table$layout$name == "guide-box")
+  if (length(index)) {
+    index <- index[!vapply(table$grobs[index], inherits, logical(1), "zeroGrob")]
+  }
+  if (!length(index)) return(grid::nullGrob())
+  table$grobs[[index[1L]]]
+}
+
+save_manuscript_figure <- function(plot_obj, out_path, stem) {
+  dir.create(out_path, recursive = TRUE, showWarnings = FALSE)
+  stem <- paste0(stem, "_LargeLabels")
+  pdf_fp <- file.path(out_path, paste0(stem, ".pdf"))
+
+  # Cairo embeds the system fonts when this device is available.
+  if (isTRUE(capabilities("cairo"))) {
+    ggplot2::ggsave(
+      pdf_fp, plot_obj, device = grDevices::cairo_pdf,
+      width = FIGURE_EXPORT_WIDTH_IN, height = FIGURE_EXPORT_HEIGHT_IN,
+      units = "in", bg = "white", limitsize = FALSE
+    )
+  } else {
+    ggplot2::ggsave(
+      pdf_fp, plot_obj, device = grDevices::pdf, useDingbats = FALSE,
+      width = FIGURE_EXPORT_WIDTH_IN, height = FIGURE_EXPORT_HEIGHT_IN,
+      units = "in", bg = "white", limitsize = FALSE
+    )
+    message("Cairo is unavailable; used the standard PDF device for ", pdf_fp)
+  }
+
+  ggplot2::ggsave(
+    file.path(out_path, paste0(stem, ".png")), plot_obj,
+    width = FIGURE_EXPORT_WIDTH_IN, height = FIGURE_EXPORT_HEIGHT_IN,
+    units = "in", dpi = 600, bg = "white", limitsize = FALSE
+  )
+  ggplot2::ggsave(
+    file.path(out_path, paste0(stem, ".tiff")), plot_obj,
+    device = grDevices::tiff, compression = "lzw",
+    width = FIGURE_EXPORT_WIDTH_IN, height = FIGURE_EXPORT_HEIGHT_IN,
+    units = "in", dpi = 600, bg = "white", limitsize = FALSE
+  )
+  message("Saved larger-label PDF, PNG and 600-dpi TIFF to: ", out_path)
+}
+
 ###############################################################################
 # Figure 1 — Nature Communications
 # A fungal volatile enhances drought resilience in perennial ryegrass
 # through host and microbial modulation
 #
 # Outputs:
-#   Figure1_NatCom.pdf
-#   Figure1_NatCom.png
+#   Figure1_NatCom_LargeLabels.pdf
+#   Figure1_NatCom_LargeLabels.png
+#   Figure1_NatCom_LargeLabels.tiff
 #   Figure1_PanelB_SPAD_Drought.csv
+#   Figure1_SPAD_Letters_by_Water.csv
+#   Figure1_SPAD_Tukey_by_Water.csv
 #   Figure1_Biomass_Drought.csv
 ###############################################################################
 
@@ -26,7 +119,7 @@ suppressPackageStartupMessages({
 # 1. Paths
 # ─────────────────────────────────────────────────────────────────────────────
 
-project_root <- "C:/Users/soths/OneDrive - Lincoln University/Writing/NatMicro/github"
+project_root <- Sys.getenv("MANUSCRIPT_PROJECT_ROOT", "C:/Users/soths/OneDrive - Lincoln University/Writing/NatMicro/github")
 
 data_dir <- file.path(project_root, "3.plant_biomass", "data")
 
@@ -55,18 +148,34 @@ design_png <- file.path(data_dir,
 # 2. Theme and colours
 # ─────────────────────────────────────────────────────────────────────────────
 
-theme_natcom <- function(base_size = 14) {
-  theme_classic(base_size = base_size) +
+# Panel A uses Biotron_Experiment.png: its own labels must be enlarged in that source image.
+theme_natcom <- function(base_size = FIGURE_TEXT$axis) {
+  theme_classic(base_size = figure_pt(base_size), base_family = "sans") +
     theme(
-      axis.title = element_text(face = "bold", colour = "black"),
-      axis.text = element_text(colour = "black"),
-      axis.text.x = element_text(angle = 25, hjust = 1),
+      axis.title = element_text(size = figure_pt(FIGURE_TEXT$axis_title),
+                                face = "bold", colour = "black"),
+      axis.text = element_text(size = figure_pt(FIGURE_TEXT$axis), colour = "black"),
+      axis.text.x = element_text(size = figure_pt(FIGURE_TEXT$axis), angle = 35, hjust = 1),
       strip.background = element_rect(fill = "grey95", colour = "grey70"),
-      strip.text = element_text(face = "bold", colour = "black"),
-      legend.title = element_text(face = "bold"),
-      legend.text = element_text(colour = "black"),
-      panel.grid = element_blank(),
-      plot.margin = margin(8, 8, 8, 8)
+      strip.text = element_text(size = figure_pt(FIGURE_TEXT$facet),
+                                face = "bold", colour = "black"),
+      legend.title = element_text(size = figure_pt(FIGURE_TEXT$legend_title),
+                                  face = "bold"),
+      legend.text = element_text(size = figure_pt(FIGURE_TEXT$legend), colour = "black"),
+      legend.position = "bottom",
+      legend.direction = "horizontal",
+      legend.box = "vertical",
+      legend.key.size = unit(figure_pt(8), "pt"),
+      legend.spacing.y = unit(figure_pt(2), "pt"),
+      legend.box.spacing = unit(figure_pt(2), "pt"),
+      plot.title = element_text(size = figure_pt(FIGURE_TEXT$panel), face = "bold", hjust = 0),
+      plot.subtitle = element_text(size = figure_pt(FIGURE_TEXT$subtitle),
+                                   face = "bold", hjust = 0, lineheight = 1.05,
+                                   margin = margin(b = figure_pt(2))),
+      plot.title.position = "plot",
+      legend.margin = margin(0, 0, 0, 0),
+      panel.spacing = unit(figure_pt(4), "pt"),
+      plot.margin = margin(figure_pt(3), figure_pt(3), figure_pt(3), figure_pt(3))
     )
 }
 
@@ -92,10 +201,10 @@ if (!file.exists(design_png)) {
 panel_a <- ggdraw() +
   draw_image(
     png::readPNG(design_png),
-    x = -0.10,
-    y = -0.08,
-    width = 1.20,
-    height = 1.20
+    x = 0,
+    y = 0,
+    width = 1,
+    height = 1
   ) +
   theme_void()
 
@@ -170,15 +279,44 @@ spad_raw <- bind_rows(lapply(spad_files, read_spad_file)) %>%
     Water = factor(Water, levels = c("Irrigated", "Drought"))
   )
 
+# Fit the same three-way model used for the omnibus ANOVA at each timepoint.
+# Compact-letter displays and pairwise comparisons are then calculated as
+# simple effects among Treatment x Endophyte combinations within each Water
+# regime. Panel B displays the Drought simple effects only.
 make_spad_letters <- function(df_sub) {
-  mod <- aov(SPAD ~ Treatment * Endophyte, data = df_sub)
-  
-  emmeans(mod, ~ Treatment * Endophyte) %>%
+  mod <- aov(
+    SPAD ~ Treatment * Endophyte * Water,
+    data = df_sub
+  )
+
+  emm <- emmeans(
+    mod,
+    ~ Treatment * Endophyte | Water
+  )
+
+  emm %>%
     multcomp::cld(Letters = letters, adjust = "tukey") %>%
     as.data.frame() %>%
     as_tibble() %>%
     mutate(Letters = stringr::str_trim(.group)) %>%
-    dplyr::select(Treatment, Endophyte, Letters)
+    dplyr::select(Water, Treatment, Endophyte, Letters)
+}
+
+make_spad_tukey <- function(df_sub) {
+  mod <- aov(
+    SPAD ~ Treatment * Endophyte * Water,
+    data = df_sub
+  )
+
+  emm <- emmeans(
+    mod,
+    ~ Treatment * Endophyte | Water
+  )
+
+  pairs(emm, adjust = "tukey") %>%
+    summary(infer = c(TRUE, TRUE)) %>%
+    as.data.frame() %>%
+    as_tibble()
 }
 
 spad_summary <- spad_raw %>%
@@ -191,8 +329,13 @@ spad_summary <- spad_raw %>%
   )
 
 spad_letters <- spad_raw %>%
-  group_by(Timepoint, Water) %>%
+  group_by(Timepoint) %>%
   group_modify(~ make_spad_letters(.x)) %>%
+  ungroup()
+
+spad_tukey <- spad_raw %>%
+  group_by(Timepoint) %>%
+  group_modify(~ make_spad_tukey(.x)) %>%
   ungroup()
 
 spad_plot_df <- spad_summary %>%
@@ -209,36 +352,53 @@ write_csv(
   file.path(results_dir, "Figure1_PanelB_SPAD_Drought.csv")
 )
 
+write_csv(
+  spad_letters,
+  file.path(results_dir, "Figure1_SPAD_Letters_by_Water.csv")
+)
+
+write_csv(
+  spad_tukey,
+  file.path(results_dir, "Figure1_SPAD_Tukey_by_Water.csv")
+)
+
+# Stagger the two endophyte letters vertically to prevent multi-letter CLDs touching.
+# This changes label placement only; the original means, SDs and CLDs are retained.
+spad_letter_step <- max(spad_plot_df$Mean + spad_plot_df$SD, na.rm = TRUE) * 0.10
+
 panel_b <- spad_plot_df %>%
   filter(Water == "Drought") %>%
   ggplot(aes(x = Treatment, y = Mean, fill = Endophyte)) +
   geom_col(
-    position = position_dodge(width = 0.8),
-    width = 0.70,
+    position = position_dodge(width = 0.90),
+    width = 0.56,
     colour = "black",
     linewidth = 0.4
   ) +
   geom_errorbar(
     aes(ymin = Mean - SD, ymax = Mean + SD),
-    position = position_dodge(width = 0.8),
+    position = position_dodge(width = 0.90),
     width = 0.15,
     linewidth = 0.5
   ) +
   geom_text(
-    aes(y = label_y, label = Letters),
-    position = position_dodge(width = 0.8),
-    size = 3.4,
-    vjust = 0
+    aes(y = label_y + ifelse(Endophyte == "AR37", spad_letter_step, 0),
+        label = Letters),
+    position = position_dodge(width = 0.90),
+    size = figure_mm(FIGURE_TEXT$annotation),
+    fontface = "plain",
+    vjust = 0,
+    show.legend = FALSE
   ) +
   facet_wrap(~ Timepoint, nrow = 1) +
   scale_fill_manual(values = endo_cols) +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.20))) +
+  scale_y_continuous(n.breaks = 4, expand = expansion(mult = c(0, 0.18))) +
   labs(
     x = "Seed treatment",
     y = "SPAD",
     fill = "Endophyte"
   ) +
-  theme_natcom(12)
+  theme_natcom()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. Biomass data
@@ -400,7 +560,7 @@ plot_biomass_panel <- function(metric_name, y_lab) {
   ) +
     geom_boxplot(
       position = position_dodge(width = 0.75),
-      width = 0.58,
+      width = 0.50,
       outlier.shape = NA,
       colour = "black",
       linewidth = 0.45,
@@ -412,7 +572,7 @@ plot_biomass_panel <- function(metric_name, y_lab) {
         jitter.width = 0.06,
         dodge.width = 0.75
       ),
-      size = 1.5,
+      size = figure_symbol(1.2),
       alpha = 0.60,
       show.legend = FALSE
     ) +
@@ -426,8 +586,10 @@ plot_biomass_panel <- function(metric_name, y_lab) {
       ),
       position = position_dodge(width = 0.75),
       inherit.aes = FALSE,
-      size = 3.6,
-      vjust = 0
+      size = figure_mm(FIGURE_TEXT$annotation),
+      fontface = "plain",
+      vjust = 0,
+      show.legend = FALSE
     ) +
     facet_wrap(
       ~ Harvest,
@@ -436,6 +598,7 @@ plot_biomass_panel <- function(metric_name, y_lab) {
     ) +
     scale_fill_manual(values = endo_cols) +
     scale_y_continuous(
+      n.breaks = 4,
       expand = expansion(mult = c(0, 0.20))
     ) +
     labs(
@@ -443,29 +606,9 @@ plot_biomass_panel <- function(metric_name, y_lab) {
       y = y_lab,
       fill = "Endophyte"
     ) +
-    theme_natcom(14) +
+    theme_natcom() +
     theme(
-      legend.position = "right",
-      axis.text.x = element_text(
-        angle = 25,
-        hjust = 1,
-        size = 12
-      ),
-      axis.title = element_text(
-        size = 14,
-        face = "bold"
-      ),
-      strip.text = element_text(
-        size = 12,
-        face = "bold"
-      ),
-      legend.title = element_text(
-        size = 13,
-        face = "bold"
-      ),
-      legend.text = element_text(
-        size = 12
-      )
+      legend.position = "bottom"
     )
 }
 
@@ -479,56 +622,58 @@ panel_d <- plot_biomass_panel("Dry weight", "Dry weight (g)")
 panel_a <- panel_a +
   ggtitle("A") +
   theme(
-    plot.title = element_text(face = "bold", size = 18, hjust = 0)
+    plot.title = element_text(face = "bold", size = figure_pt(FIGURE_TEXT$panel), hjust = 0)
   )
 
 panel_b <- panel_b +
   ggtitle("B") +
   theme(
-    plot.title = element_text(face = "bold", size = 18, hjust = 0)
+    plot.title = element_text(face = "bold", size = figure_pt(FIGURE_TEXT$panel), hjust = 0)
   )
 
 panel_c <- panel_c +
   ggtitle("C") +
   theme(
-    plot.title = element_text(face = "bold", size = 18, hjust = 0)
+    plot.title = element_text(face = "bold", size = figure_pt(FIGURE_TEXT$panel), hjust = 0)
   )
 
 panel_d <- panel_d +
   ggtitle("D") +
   theme(
-    plot.title = element_text(face = "bold", size = 18, hjust = 0)
+    plot.title = element_text(face = "bold", size = figure_pt(FIGURE_TEXT$panel), hjust = 0)
   )
 
-fig1 <- (panel_a | panel_b) /
-  (panel_c | panel_d) +
-  plot_layout(
-    widths = c(1.4, 1.6),
-    heights = c(1.2, 1)
-  )
+# One shared Endophyte legend, using only the bar layer's fill keys.
+legend_plot <- panel_b +
+  guides(fill = guide_legend(nrow = 1, title.position = "left")) +
+  theme(legend.position = "bottom", legend.box = "horizontal")
+common_legend <- figure_legend(legend_plot)
 
-ggsave(
-  filename = file.path(manuscript_dir, "Figure1_NatCom.pdf"),
-  plot = fig1,
-  width = 16,
-  height = 10,
-  useDingbats = FALSE,
-  limitsize = FALSE
+# Restore the original two-by-two panel arrangement.
+# Slightly more width for B accommodates its three time-point facets.
+top_row <- cowplot::plot_grid(
+  panel_a,
+  panel_b + theme(legend.position = "none"),
+  nrow = 1, rel_widths = c(1.25, 1.75)
+)
+bottom_row <- cowplot::plot_grid(
+  panel_c + theme(legend.position = "none"),
+  panel_d + theme(legend.position = "none"),
+  nrow = 1, rel_widths = c(1, 1)
+)
+fig1 <- cowplot::plot_grid(
+  top_row, bottom_row, common_legend,
+  ncol = 1, rel_heights = c(2.40, 2.30, 0.30)
 )
 
-ggsave(
-  filename = file.path(manuscript_dir, "Figure1_NatCom.png"),
-  plot = fig1,
-  width = 16,
-  height = 10,
-  dpi = 600,
-  limitsize = FALSE
-)
+save_manuscript_figure(fig1, manuscript_dir, "Figure1_NatCom")
+
+
 
 writeLines(
   capture.output(sessionInfo()),
   file.path(results_dir, "sessionInfo_Figure1_NatCom.txt")
 )
 
-message("Done. Figure 1 saved to: ", results_dir)
+message("Done. Figure 1 saved to: ", manuscript_dir)
 

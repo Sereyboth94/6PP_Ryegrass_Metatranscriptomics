@@ -1,3 +1,99 @@
+# ============================================================================
+# Larger labels for the final, assembled manuscript figure
+# Composition revision: 2026-10-13 (phylum C; genus supplement with A/B/C and a two-column legend)
+# Text sizes retain the previous export calibration as the canvas widens.
+# The PDF, PNG and LZW-compressed TIFF use the same layout; rasters use 600 dpi.
+# Updated Figure S4: Figure3_Genus_Composition_Supplement_LargeLabels.{pdf,png,tiff}
+# Change MANUSCRIPT_FONT_SCALE to 1.10 for a further 10% increase.
+# MANUSCRIPT_PROJECT_ROOT optionally overrides the original Windows project path.
+# ============================================================================
+FIGURE_DISPLAY_WIDTH_IN <- as.numeric(Sys.getenv("MANUSCRIPT_FIGURE_WIDTH_IN", "6.27"))
+FIGURE_EXPORT_WIDTH_IN <- as.numeric(Sys.getenv("MANUSCRIPT_EXPORT_WIDTH_IN", "8.0"))
+# Keep the previous exported text and symbol sizes as the canvas widens.
+FIGURE_REFERENCE_WIDTH_IN <- 7.1
+# Final height is calculated after measuring the phylum legend.
+FIGURE_EXPORT_HEIGHT_IN <- 7.55
+FIGURE_REVISION <- "2026-10-12 wider-export update"
+message("Figure 3: ", FIGURE_REVISION)
+FIGURE3_COMPOSITION_REVISION <- "2026-10-13 Figure-S4 smaller-x-labels, top-margin update"
+message("Figure 3 composition: ", FIGURE3_COMPOSITION_REVISION)
+FIGURE_FONT_SCALE <- as.numeric(Sys.getenv("MANUSCRIPT_FONT_SCALE", "1.0"))
+# Reduce points and line keys by 20%; text remains independently sized.
+FIGURE_SYMBOL_SCALE <- as.numeric(Sys.getenv("MANUSCRIPT_SYMBOL_SCALE", "0.80"))
+
+if (any(!is.finite(c(FIGURE_EXPORT_WIDTH_IN, FIGURE_DISPLAY_WIDTH_IN, FIGURE_FONT_SCALE, FIGURE_SYMBOL_SCALE))) ||
+    any(c(FIGURE_EXPORT_WIDTH_IN, FIGURE_DISPLAY_WIDTH_IN, FIGURE_FONT_SCALE, FIGURE_SYMBOL_SCALE) <= 0)) {
+  stop("Export width, manuscript width, font scale and symbol scale must be positive numbers.")
+}
+
+FIGURE_TEXT <- list(
+  axis = 9, axis_title = 9.5, facet = 8.5,
+  legend = 8, legend_title = 8.5,
+  subtitle = 9, panel = 12, annotation = 8.5, dense = 8
+)
+
+# Themes use points; geom_text/geom_label use millimetres.
+figure_pt <- function(pt) {
+  pt * FIGURE_FONT_SCALE * FIGURE_REFERENCE_WIDTH_IN / FIGURE_DISPLAY_WIDTH_IN
+}
+figure_mm <- function(pt) figure_pt(pt) / (72.27 / 25.4)
+figure_symbol <- function(mm) {
+  mm * FIGURE_SYMBOL_SCALE * FIGURE_REFERENCE_WIDTH_IN / FIGURE_DISPLAY_WIDTH_IN
+}
+figure_subtitle <- function(x, width = 32) stringr::str_wrap(x, width = width)
+
+# Extract a single legend without reserving space inside the data panel.
+# Supports both the older guide-box and the newer position-specific guide boxes.
+figure_legend <- function(plot_obj, position = "bottom") {
+  table <- ggplot2::ggplotGrob(
+    plot_obj + ggplot2::theme(legend.position = position)
+  )
+  index <- which(table$layout$name == paste0("guide-box-", position))
+  if (!length(index)) index <- which(table$layout$name == "guide-box")
+  if (length(index)) {
+    index <- index[!vapply(table$grobs[index], inherits, logical(1), "zeroGrob")]
+  }
+  if (!length(index)) return(grid::nullGrob())
+  table$grobs[[index[1L]]]
+}
+
+save_manuscript_figure <- function(plot_obj, out_path, stem,
+                                   width = FIGURE_EXPORT_WIDTH_IN,
+                                   height = FIGURE_EXPORT_HEIGHT_IN) {
+  dir.create(out_path, recursive = TRUE, showWarnings = FALSE)
+  stem <- paste0(stem, "_LargeLabels")
+  pdf_fp <- file.path(out_path, paste0(stem, ".pdf"))
+
+  # Cairo embeds the system fonts when this device is available.
+  if (isTRUE(capabilities("cairo"))) {
+    ggplot2::ggsave(
+      pdf_fp, plot_obj, device = grDevices::cairo_pdf,
+      width = width, height = height,
+      units = "in", bg = "white", limitsize = FALSE
+    )
+  } else {
+    ggplot2::ggsave(
+      pdf_fp, plot_obj, device = grDevices::pdf, useDingbats = FALSE,
+      width = width, height = height,
+      units = "in", bg = "white", limitsize = FALSE
+    )
+    message("Cairo is unavailable; used the standard PDF device for ", pdf_fp)
+  }
+
+  ggplot2::ggsave(
+    file.path(out_path, paste0(stem, ".png")), plot_obj,
+    width = width, height = height,
+    units = "in", dpi = 600, bg = "white", limitsize = FALSE
+  )
+  ggplot2::ggsave(
+    file.path(out_path, paste0(stem, ".tiff")), plot_obj,
+    device = grDevices::tiff, compression = "lzw",
+    width = width, height = height,
+    units = "in", dpi = 600, bg = "white", limitsize = FALSE
+  )
+  message("Saved larger-label PDF, PNG and 600-dpi TIFF to: ", out_path)
+}
+
 ## =========================================================
 ## Metatranscriptomics genus-level analysis pipeline
 ## Publication-ready community structure + differential abundance
@@ -44,7 +140,7 @@ invisible(lapply(required_pkgs, library, character.only = TRUE))
 ## -----------------------------
 ## 1) File paths
 ## -----------------------------
-project_dir <- "C:/Users/soths/OneDrive - Lincoln University/Writing/NatMicro/github"
+project_dir <- Sys.getenv("MANUSCRIPT_PROJECT_ROOT", "C:/Users/soths/OneDrive - Lincoln University/Writing/NatMicro/github")
 
 data_dir <- file.path(project_dir, "5.microbial_taxa", "data")
 out_dir  <- file.path(project_dir, "5.microbial_taxa", "results")
@@ -70,7 +166,19 @@ dir.create(repr_dir,  recursive = TRUE, showWarnings = FALSE)
 dir.create(fig_dir,   recursive = TRUE, showWarnings = FALSE)
 
 genus_fp  <- file.path(data_dir, "Genus.tsv")
-phylum_fp <- file.path(data_dir, "Kraken2_Phylum_long_with_metadata.csv")
+genus_phylum_map_fp <- file.path(data_dir, "Genus_Phylum_mapping.csv")
+bracken_phylum_fp <- file.path(data_dir, "Bracken_Phylum_long_with_metadata.csv")
+kraken_phylum_fp <- file.path(data_dir, "Kraken2_Phylum_long_with_metadata.csv")
+# Prefer a supplied override, then Bracken phylum estimates, then the original
+# Kraken2 table. A complete genus-to-phylum map takes priority if present.
+phylum_override <- Sys.getenv("FIGURE3_PHYLUM_FILE", "")
+phylum_fp <- if (nzchar(phylum_override)) {
+  phylum_override
+} else if (file.exists(bracken_phylum_fp)) {
+  bracken_phylum_fp
+} else {
+  kraken_phylum_fp
+}
 meta_fp   <- file.path(data_dir, "Metadata_tidy.csv")
 
 ## -----------------------------
@@ -511,108 +619,172 @@ write_csv(
 ## =========================================================
 ## 9B) Phylum composition figure
 ## =========================================================
-if (file.exists(phylum_fp)) {
-  
-  phy <- read_csv(phylum_fp, show_col_types = FALSE)
-  
-  req_phy_base <- c("SampleID", "Phylum", "pct", "Endophyte", "Water", "Harvest")
-  missing_phy_base <- setdiff(req_phy_base, names(phy))
-  if (length(missing_phy_base) > 0) {
-    stop("Missing columns in phylum input: ", paste(missing_phy_base, collapse = ", "))
+# All phylum composition outputs use the same QC-retained samples as A/B/D.
+# A supplied mapping preserves the filtered Bracken genus denominator exactly.
+# Otherwise the phylum table is normalised within retained microbial phyla;
+# its Kraken2/Bracken provenance is recorded rather than inferred from genus data.
+if (file.exists(genus_phylum_map_fp) || file.exists(phylum_fp)) {
+  phylum_excluded_present <- character()
+  if (file.exists(genus_phylum_map_fp)) {
+    genus_phylum_map <- readr::read_csv(genus_phylum_map_fp, show_col_types = FALSE)
+    if (!all(c("Genus", "Phylum") %in% names(genus_phylum_map))) {
+      stop("Genus_Phylum_mapping.csv must contain columns Genus and Phylum.")
+    }
+    genus_phylum_map <- genus_phylum_map %>%
+      dplyr::transmute(Genus = stringr::str_trim(as.character(Genus)),
+                       Phylum = stringr::str_trim(as.character(Phylum))) %>%
+      dplyr::distinct()
+    if (anyNA(genus_phylum_map) ||
+        any(!nzchar(genus_phylum_map$Genus)) || any(!nzchar(genus_phylum_map$Phylum)) ||
+        anyDuplicated(genus_phylum_map$Genus)) {
+      stop("The genus-to-phylum mapping must have one non-missing phylum per genus.")
+    }
+    missing_mapped_genera <- setdiff(unique(genus_long$Genus), genus_phylum_map$Genus)
+    if (length(missing_mapped_genera)) {
+      stop("Genus-to-phylum mapping is incomplete. Missing: ",
+           paste(head(missing_mapped_genera, 20), collapse = ", "),
+           if (length(missing_mapped_genera) > 20) " ..." else "")
+    }
+    phy_values <- genus_long %>%
+      dplyr::select(SampleID, Genus, pct_rel) %>%
+      dplyr::left_join(genus_phylum_map, by = "Genus") %>%
+      dplyr::transmute(SampleID, Phylum, abundance = pct_rel)
+    phylum_source <- "Bracken genus estimates aggregated to phylum"
+    phylum_input_path <- paste(genus_fp, genus_phylum_map_fp, sep = "; ")
+    phylum_denominator <- "The same filtered genus-level microbial transcript profile as panels A, B and D"
+  } else {
+    phy_input <- readr::read_csv(phylum_fp, show_col_types = FALSE)
+    if (!all(c("SampleID", "Phylum") %in% names(phy_input))) {
+      stop("Phylum input must contain SampleID and Phylum columns: ", phylum_fp)
+    }
+    abundance_columns <- intersect(c("pct", "fraction_total_reads", "new_est_reads"), names(phy_input))
+    if (!length(abundance_columns)) {
+      stop("Phylum input must contain pct, fraction_total_reads or new_est_reads: ", phylum_fp)
+    }
+    abundance_column <- abundance_columns[1L]
+    phy_values <- phy_input %>%
+      dplyr::transmute(
+        SampleID = stringr::str_replace(stringr::str_trim(as.character(SampleID)),
+                                        "^([A-H])(\\d)$", "\\10\\2"),
+        Phylum = stringr::str_trim(as.character(Phylum)),
+        abundance = suppressWarnings(as.numeric(.data[[abundance_column]]))
+      ) %>%
+      dplyr::filter(SampleID %in% meta_use$SampleID) %>%
+      dplyr::mutate(Phylum = dplyr::if_else(
+        is.na(Phylum) | Phylum == "" |
+          tolower(Phylum) %in% c("unclassified", "unassigned", "unknown"),
+        "Unassigned phylum", Phylum
+      ))
+    # Retain the legacy Chordata exclusion and remove named plant-host phyla.
+    # Fungi, protists and other microbial phyla remain in the denominator.
+    phylum_host_exclusions <- c("Chordata", "Streptophyta", "Tracheophyta", "Magnoliophyta")
+    phylum_excluded_present <- intersect(phylum_host_exclusions, unique(phy_values$Phylum))
+    phy_values <- phy_values %>%
+      dplyr::filter(!Phylum %in% phylum_host_exclusions)
+    phylum_source <- if (nzchar(phylum_override)) {
+      "Supplied phylum-level abundance table (see input path)"
+    } else if (identical(phylum_fp, bracken_phylum_fp)) {
+      "Bracken phylum-level estimates"
+    } else {
+      "Kraken2 phylum-level assigned-read composition"
+    }
+    phylum_input_path <- phylum_fp
+    phylum_denominator <- "Sum of retained phylum-level microbial values within each sample; distinct from the filtered genus denominator"
   }
-  
-  if (!("Treatment" %in% names(phy)) && !("Amendment" %in% names(phy))) {
-    stop("Phylum input must contain either 'Treatment' or 'Amendment'.")
+  if (!nrow(phy_values) || any(!is.finite(phy_values$abundance)) ||
+      any(phy_values$abundance < 0)) {
+    stop("Retained phylum abundances must be finite, non-negative numbers.")
   }
-  
-  phy <- phy %>%
-    dplyr::mutate(
-      Treatment_clean = dplyr::case_when(
-        "Amendment" %in% names(.) ~ as.character(.data[["Amendment"]]),
-        TRUE ~ as.character(.data[["Treatment"]])
-      ),
-      Treatment_clean = dplyr::recode(Treatment_clean, "VOC" = "6-PP"),
-      Endophyte = factor(Endophyte, levels = c("Nil", "AR37")),
-      Water     = factor(Water, levels = c("Irrigated", "Drought")),
-      Harvest   = factor(Harvest, levels = c("During Drought", "Post Drought")),
-      Treatment = factor(Treatment_clean, levels = c("Control", "Polymer", "6-PP")),
-      Phylum    = as.character(Phylum)
-    ) %>%
-    dplyr::filter(!Phylum %in% c("Chordata")) %>%
-    dplyr::select(-Treatment_clean)
-  
-  phy <- phy %>%
-    group_by(SampleID) %>%
-    dplyr::mutate(pct_rel = pct / sum(pct, na.rm = TRUE) * 100) %>%
-    ungroup()
-  
+  phylum_sample_totals <- phy_values %>%
+    dplyr::group_by(SampleID) %>%
+    dplyr::summarise(total = sum(abundance), .groups = "drop")
+  missing_phylum_samples <- setdiff(meta_use$SampleID,
+    phylum_sample_totals$SampleID[phylum_sample_totals$total > 0])
+  if (length(missing_phylum_samples)) {
+    stop("Phylum input has no positive microbial profile for QC-retained samples: ",
+         paste(missing_phylum_samples, collapse = ", "))
+  }
+  # Sum duplicate rows, then explicitly include zero for absent sample/phyla.
+  # Averaging only detected taxa would overestimate their group percentages.
+  phy <- phy_values %>%
+    dplyr::group_by(SampleID, Phylum) %>%
+    dplyr::summarise(abundance = sum(abundance), .groups = "drop") %>%
+    dplyr::group_by(Phylum) %>%
+    dplyr::filter(any(abundance > 0)) %>%
+    dplyr::ungroup() %>%
+    tidyr::complete(SampleID = meta_use$SampleID, Phylum, fill = list(abundance = 0)) %>%
+    dplyr::group_by(SampleID) %>%
+    dplyr::mutate(pct_rel = abundance / sum(abundance) * 100) %>%
+    dplyr::ungroup() %>%
+    dplyr::left_join(
+      meta_use %>% dplyr::select(SampleID, Endophyte, Treatment, Water, Harvest),
+      by = "SampleID"
+    )
   phy_mean0 <- phy %>%
-    group_by(Endophyte, Treatment, Water, Harvest, Phylum) %>%
-    dplyr::summarise(mean_pct = mean(pct_rel, na.rm = TRUE), .groups = "drop")
-  
-  top_n_phylum <- 10
-  
-  top_phyla <- phy_mean0 %>%
-    group_by(Phylum) %>%
-    dplyr::summarise(overall = mean(mean_pct, na.rm = TRUE), .groups = "drop") %>%
-    dplyr::arrange(desc(overall)) %>%
-    slice_head(n = top_n_phylum) %>%
-    pull(Phylum)
-  
-  phy_mean <- phy_mean0 %>%
-    dplyr::mutate(Phylum = ifelse(Phylum %in% top_phyla, Phylum, "Other")) %>%
-    group_by(Endophyte, Treatment, Water, Harvest, Phylum) %>%
-    dplyr::summarise(mean_pct = sum(mean_pct), .groups = "drop")
-  
-  phy_overall_tbl <- phy_mean %>%
-    group_by(Phylum) %>%
-    dplyr::summarise(overall = mean(mean_pct, na.rm = TRUE), .groups = "drop") %>%
-    dplyr::arrange(desc(overall))
-  
-  phy_named_big_to_small <- phy_overall_tbl %>%
-    dplyr::filter(Phylum != "Other") %>%
-    pull(Phylum)
-  
-  phy_levels_small_to_big <- c("Other", rev(phy_named_big_to_small))
-  phy_levels_small_to_big <- phy_levels_small_to_big[phy_levels_small_to_big %in% unique(phy_mean$Phylum)]
-  
-  phy_mean <- phy_mean %>%
-    dplyr::mutate(Phylum = factor(Phylum, levels = phy_levels_small_to_big))
-  
-  phy_mean <- phy_mean %>%
-    dplyr::mutate(Endophyte_plot = as.character(Endophyte))
-  
-  phy_spacer_rows <- phy_mean %>%
-    distinct(Treatment, Water, Harvest, Phylum) %>%
-    dplyr::mutate(Endophyte_plot = " ", mean_pct = 0)
-  
-  phy_mean <- bind_rows(phy_mean, phy_spacer_rows) %>%
-    dplyr::mutate(Endophyte_plot = factor(Endophyte_plot, levels = c("Nil", " ", "AR37")))
-  
-  phy_levels_fill <- levels(phy_mean$Phylum)
-  
-  phy_non_other <- phy_overall_tbl %>%
-    dplyr::filter(Phylum != "Other") %>%
-    pull(Phylum)
-  
-  phy_non_other <- phy_non_other[phy_non_other %in% phy_levels_fill]
-  phy_n_non_other <- length(phy_non_other)
-  
-  if (phy_n_non_other > 10) {
-    stop("More than 10 non-Other phyla. Reduce top_n_phylum.")
+    dplyr::group_by(Endophyte, Treatment, Water, Harvest, Phylum) %>%
+    dplyr::summarise(mean_pct = mean(pct_rel), .groups = "drop")
+  top_n_phylum <- as.numeric(Sys.getenv("FIGURE3_TOP_N_PHYLA", "10"))
+  if (!is.finite(top_n_phylum) || top_n_phylum < 1 ||
+      top_n_phylum != floor(top_n_phylum) || top_n_phylum > .Machine$integer.max) {
+    stop("FIGURE3_TOP_N_PHYLA must be a positive integer.")
   }
-  
+  top_n_phylum <- as.integer(top_n_phylum)
+  phy_ranked <- phy %>%
+    dplyr::group_by(Phylum) %>%
+    dplyr::summarise(overall_pct = mean(pct_rel), .groups = "drop") %>%
+    dplyr::arrange(dplyr::desc(overall_pct)) %>%
+    dplyr::mutate(cumulative_pct = cumsum(overall_pct))
+  top_phyla <- phy_ranked %>%
+    dplyr::filter(!Phylum %in% c("Other", "Unassigned phylum")) %>%
+    dplyr::slice_head(n = top_n_phylum) %>%
+    dplyr::pull(Phylum)
+  # Keep any unassigned phylum explicitly separate from the pooled Other.
+  phy_mean <- phy_mean0 %>%
+    dplyr::mutate(Phylum = dplyr::if_else(
+      Phylum %in% c(top_phyla, "Unassigned phylum"), Phylum, "Other")) %>%
+    dplyr::group_by(Endophyte, Treatment, Water, Harvest, Phylum) %>%
+    dplyr::summarise(mean_pct = sum(mean_pct), .groups = "drop")
+  phy_overall_tbl <- phy_mean %>%
+    dplyr::group_by(Phylum) %>%
+    dplyr::summarise(overall = mean(mean_pct), .groups = "drop") %>%
+    dplyr::arrange(dplyr::desc(overall))
+  phy_named_big_to_small <- phy_overall_tbl %>%
+    dplyr::filter(!Phylum %in% c("Other", "Unassigned phylum")) %>%
+    dplyr::pull(Phylum)
+  phy_legend_order <- c(phy_named_big_to_small,
+                        intersect(c("Unassigned phylum", "Other"), phy_overall_tbl$Phylum))
+  phy_levels_small_to_big <- rev(phy_legend_order)
+  phy_mean <- phy_mean %>%
+    dplyr::mutate(Phylum = factor(Phylum, levels = phy_levels_small_to_big),
+                  Endophyte_plot = as.character(Endophyte))
+  # Keep a non-spacer copy for the manuscript panel and tabular output.
+  phy_fig3 <- phy_mean %>%
+    dplyr::mutate(Phylum = factor(as.character(Phylum), levels = phy_legend_order))
+  phylum_group_totals <- phy_fig3 %>%
+    dplyr::group_by(Endophyte, Treatment, Water, Harvest) %>%
+    dplyr::summarise(total_pct = sum(mean_pct), .groups = "drop")
+  if (any(abs(phylum_group_totals$total_pct - 100) > 1e-6)) {
+    stop("Phylum group percentages do not sum to 100; check the input and aggregation.")
+  }
+  phy_spacer_rows <- phy_mean %>%
+    dplyr::distinct(Treatment, Water, Harvest, Phylum) %>%
+    dplyr::mutate(Endophyte_plot = " ", mean_pct = 0)
+  phy_mean <- dplyr::bind_rows(phy_mean, phy_spacer_rows) %>%
+    dplyr::mutate(Endophyte_plot = factor(Endophyte_plot, levels = c("Nil", " ", "AR37")))
   phy_npg10 <- ggsci::pal_npg("nrc")(10)
   phy_npg10_rot <- phy_npg10[c(3:10, 1:2)]
-  
-  phy_pal_non_other <- phy_npg10_rot[seq_len(phy_n_non_other)]
-  names(phy_pal_non_other) <- phy_non_other
-  
-  phy_pal <- phy_pal_non_other
-  if ("Other" %in% phy_levels_fill) phy_pal <- c(phy_pal, Other = "grey75")
-  
-  phy_pal <- phy_pal[phy_levels_fill]
-  
+  phy_named_colours <- phy_npg10_rot[seq_len(min(length(phy_named_big_to_small), 10L))]
+  if (length(phy_named_big_to_small) > 10L) {
+    phy_named_colours <- c(phy_named_colours,
+      grDevices::hcl.colors(length(phy_named_big_to_small) - 10L, "Dark 3"))
+  }
+  phy_pal <- stats::setNames(phy_named_colours, phy_named_big_to_small)
+  if ("Unassigned phylum" %in% phy_legend_order) phy_pal["Unassigned phylum"] <- "grey40"
+  if ("Other" %in% phy_legend_order) phy_pal["Other"] <- "grey70"
+  phy_pal <- phy_pal[levels(phy_mean$Phylum)]
+  message("Figure 3 panel C phylum source: ", phylum_source)
+  message("Figure 3 panel C uses all ", nrow(meta_use), " QC-retained genus-analysis samples.")
+
   plot_one_treatment_phylum <- function(df, treatment_label, show_y = TRUE) {
     df1 <- df %>% dplyr::filter(Treatment == treatment_label)
     
@@ -670,9 +842,17 @@ if (file.exists(phylum_fp)) {
     width = 220, height = 105, units = "mm",
     dpi = 600, limitsize = FALSE
   )
+  ggsave(
+    filename = file.path(fig_dir, paste0("Fig_Phylum_ABC_Top", top_n_phylum, "_BigOnTop_Spacer_NPG_OtherGrey.tiff")),
+    plot = final_phylum_fig, device = grDevices::tiff, compression = "lzw",
+    width = 220, height = 105, units = "mm",
+    dpi = 600, limitsize = FALSE, bg = "white"
+  )
   
 } else {
-  message("Phylum input file not found: ", phylum_fp)
+  stop("Panel C now requires phylum data. Provide the existing file: ", phylum_fp,
+       "\nAlternatively supply Bracken_Phylum_long_with_metadata.csv, a complete ",
+       "Genus_Phylum_mapping.csv, or set FIGURE3_PHYLUM_FILE to your phylum CSV.")
 }
 
 ## -----------------------------
@@ -1144,7 +1324,7 @@ message("Outputs saved to: ", out_dir)
 # Figure 3 — Nature Communications taxonomy figure
 # A = Bray-Curtis PCoA
 # B = Shannon diversity
-# C = Genus-level composition
+# C = Phylum-level composition (genus composition saved separately)
 # D = PERMANOVA variance explained
 # =========================================================
 
@@ -1155,18 +1335,32 @@ suppressPackageStartupMessages({
 fig3_dir <- file.path(project_dir, "7.manuscript_figure", "4.figure3")
 dir.create(fig3_dir, recursive = TRUE, showWarnings = FALSE)
 
-theme_natcom <- function(base_size = 15) {
-  theme_classic(base_size = base_size) +
+theme_natcom <- function(base_size = FIGURE_TEXT$axis) {
+  theme_classic(base_size = figure_pt(base_size), base_family = "sans") +
     theme(
-      axis.title = element_text(face = "bold", colour = "black"),
-      axis.text = element_text(colour = "black"),
+      axis.title = element_text(size = figure_pt(FIGURE_TEXT$axis_title),
+                                face = "bold", colour = "black"),
+      axis.text = element_text(size = figure_pt(FIGURE_TEXT$axis), colour = "black"),
       strip.background = element_rect(fill = "grey95", colour = "grey70"),
-      strip.text = element_text(face = "bold", colour = "black"),
-      legend.title = element_text(face = "bold"),
-      legend.text = element_text(colour = "black"),
-      plot.title = element_text(face = "bold", hjust = 0, size = base_size + 3),
-      plot.subtitle = element_text(face = "bold", hjust = 0, size = base_size - 1),
-      plot.margin = margin(8, 8, 8, 8)
+      strip.text = element_text(size = figure_pt(FIGURE_TEXT$facet),
+                                face = "bold", colour = "black"),
+      legend.title = element_text(size = figure_pt(FIGURE_TEXT$legend_title),
+                                  face = "bold"),
+      legend.text = element_text(size = figure_pt(FIGURE_TEXT$legend), colour = "black"),
+      legend.position = "bottom",
+      legend.direction = "horizontal",
+      legend.box = "vertical",
+      legend.key.size = unit(figure_pt(8), "pt"),
+      legend.spacing.y = unit(figure_pt(2), "pt"),
+      legend.box.spacing = unit(figure_pt(2), "pt"),
+      plot.title = element_text(size = figure_pt(FIGURE_TEXT$panel), face = "bold", hjust = 0),
+      plot.subtitle = element_text(size = figure_pt(FIGURE_TEXT$subtitle),
+                                   face = "bold", hjust = 0, lineheight = 1.05,
+                                   margin = margin(b = figure_pt(2))),
+      plot.title.position = "plot",
+      legend.margin = margin(0, 0, 0, 0),
+      panel.spacing = unit(figure_pt(4), "pt"),
+      plot.margin = margin(figure_pt(3), figure_pt(3), figure_pt(3), figure_pt(3))
     )
 }
 
@@ -1179,7 +1373,7 @@ panel_a <- ggplot(
   pcoa_scores,
   aes(x = Axis.1, y = Axis.2, colour = Treatment, shape = Water)
 ) +
-  geom_point(size = 3.8, alpha = 0.9) +
+  geom_point(size = figure_symbol(2.0), alpha = 0.9) +
   facet_wrap(~ Harvest, nrow = 1) +
   scale_colour_manual(values = c(
     "Control" = "#F8766D",
@@ -1188,13 +1382,13 @@ panel_a <- ggplot(
   )) +
   labs(
     title = "A",
-    subtitle = "Genus-level Bray–Curtis PCoA",
+    subtitle = "Genus-level PCoA",
     x = paste0("PCoA1 (", pcoa_var1, "%)"),
     y = paste0("PCoA2 (", pcoa_var2, "%)"),
     colour = "Seed treatment",
     shape = "Water"
   ) +
-  theme_natcom(15)
+  theme_natcom()
 
 # Panel B — Shannon diversity
 panel_b <- ggplot(
@@ -1216,7 +1410,7 @@ panel_b <- ggplot(
       dodge.width = 0.75
     ),
     colour = "black",
-    size = 1.7,
+    size = figure_symbol(1.2),
     alpha = 0.65
   ) +
   facet_wrap(~ Harvest, nrow = 1) +
@@ -1227,30 +1421,71 @@ panel_b <- ggplot(
   scale_shape_manual(values = c("Nil" = 16, "AR37" = 17)) +
   labs(
     title = "B",
-    subtitle = "Genus-level Shannon diversity",
+    subtitle = "Shannon diversity",
     x = "Seed treatment",
     y = "Shannon diversity",
     fill = "Water",
     shape = "Endophyte"
   ) +
-  theme_natcom(15) +
-  theme(axis.text.x = element_text(angle = 25, hjust = 1))
+  theme_natcom() +
+  theme(axis.text.x = element_text(size = figure_pt(FIGURE_TEXT$axis), angle = 25, hjust = 1))
 
-# Panel C — Genus-level composition with top genera only
+# Supplementary Figure S4 — top 50 genera in three treatment panels.
 
-top_n_fig3_genera <- 20
+top_n_fig3_genera <- as.numeric(Sys.getenv("FIGURE3_TOP_N_GENERA", "50"))
+genus_legend_label_pt <- as.numeric(Sys.getenv("FIGURE3_GENUS_LABEL_PT", "5.75"))
+# Smaller Nil/AR37 labels reduce crowding beneath the paired bars.
+genus_x_label_pt <- as.numeric(Sys.getenv("FIGURE3_GENUS_X_LABEL_PT", "6.0"))
+# A wider standalone canvas leaves room for a two-column legend on the right.
+genus_supp_width <- as.numeric(Sys.getenv("FIGURE3_GENUS_WIDTH_IN", "10.50"))
+# The two harvest rows share this minimum height; a taller legend adds height if needed.
+genus_supp_body_height <- as.numeric(Sys.getenv("FIGURE3_GENUS_BODY_HEIGHT_IN", "4.50"))
+# Add a separate white row above the panel letters, measured in export inches.
+genus_supp_top_margin <- as.numeric(Sys.getenv("FIGURE3_GENUS_TOP_MARGIN_IN", "0.18"))
+if (!is.finite(top_n_fig3_genera) || top_n_fig3_genera < 1 ||
+    top_n_fig3_genera != floor(top_n_fig3_genera) ||
+    top_n_fig3_genera > .Machine$integer.max ||
+    !is.finite(genus_legend_label_pt) || genus_legend_label_pt <= 0 ||
+    !is.finite(genus_x_label_pt) || genus_x_label_pt <= 0 ||
+    !is.finite(genus_supp_width) || genus_supp_width <= 0 ||
+    !is.finite(genus_supp_body_height) || genus_supp_body_height <= 0 ||
+    !is.finite(genus_supp_top_margin) || genus_supp_top_margin < 0) {
+  stop(paste0("FIGURE3_TOP_N_GENERA must be a positive integer; ",
+              "FIGURE3_GENUS_LABEL_PT, FIGURE3_GENUS_X_LABEL_PT, FIGURE3_GENUS_WIDTH_IN and ",
+              "FIGURE3_GENUS_BODY_HEIGHT_IN must be positive; ",
+              "FIGURE3_GENUS_TOP_MARGIN_IN must be non-negative."))
+}
+top_n_fig3_genera <- as.integer(top_n_fig3_genera)
 
-top_genera_fig3 <- genus_long %>%
+genus_ranked_fig3 <- genus_long %>%
   group_by(Genus) %>%
   summarise(overall_pct = mean(pct_rel, na.rm = TRUE), .groups = "drop") %>%
   arrange(desc(overall_pct)) %>%
+  mutate(cumulative_pct = cumsum(overall_pct))
+
+top_genera_fig3 <- genus_ranked_fig3 %>%
   slice_head(n = top_n_fig3_genera) %>%
   pull(Genus)
 
-genus_fig3 <- genus_long %>%
+genus_coverage_fig3 <- 100 *
+  sum(genus_ranked_fig3$overall_pct[genus_ranked_fig3$Genus %in% top_genera_fig3]) /
+  sum(genus_ranked_fig3$overall_pct)
+message(sprintf(
+  "Supplementary genus plot displays %d genera: %.1f%% of the mean profile; Other = %.1f%%.",
+  length(top_genera_fig3), genus_coverage_fig3, 100 - genus_coverage_fig3
+))
+write_csv(
+  genus_ranked_fig3 %>%
+    mutate(Rank = row_number(), Shown_in_supplement = Genus %in% top_genera_fig3),
+  file.path(fig3_dir, "Figure3_Genus_Ranking_Coverage.csv")
+)
+
+# Sum the already-computed mean genus percentages when pooling "Other".
+# Averaging the pooled genera would understate their combined abundance.
+genus_fig3 <- gen_mean0 %>%
   mutate(Genus2 = ifelse(Genus %in% top_genera_fig3, Genus, "Other")) %>%
   group_by(Treatment, Water, Harvest, Endophyte, Genus2) %>%
-  summarise(mean_pct = mean(pct_rel, na.rm = TRUE), .groups = "drop") %>%
+  summarise(mean_pct = sum(mean_pct, na.rm = TRUE), .groups = "drop") %>%
   group_by(Treatment, Water, Harvest, Endophyte) %>%
   mutate(mean_pct = mean_pct / sum(mean_pct, na.rm = TRUE) * 100) %>%
   ungroup() %>%
@@ -1267,7 +1502,16 @@ genus_fig3_order <- c(setdiff(genus_fig3_order, "Other"), "Other")
 genus_fig3 <- genus_fig3 %>%
   mutate(Genus2 = factor(Genus2, levels = genus_fig3_order))
 
-genus_fig3_pal <- gen_pal[levels(genus_fig3$Genus2)]
+readr::write_csv(
+  genus_fig3 %>%
+    dplyr::filter(Genus2 == "Other") %>%
+    dplyr::select(Treatment, Water, Harvest, Endophyte, mean_pct),
+  file.path(fig3_dir, "Figure3_Other_Percentage_By_Group.csv")
+)
+
+genus_fig3_pal <- stats::setNames(
+  gen_pal[levels(genus_fig3$Genus2)], levels(genus_fig3$Genus2)
+)
 
 if (any(is.na(genus_fig3_pal))) {
   genus_fig3_pal[is.na(genus_fig3_pal)] <- grDevices::hcl.colors(
@@ -1278,48 +1522,126 @@ if (any(is.na(genus_fig3_pal))) {
 
 genus_fig3_pal["Other"] <- "grey70"
 
-panel_c <- ggplot(
-  genus_fig3,
-  aes(x = Endophyte_plot, y = mean_pct, fill = Genus2)
-) +
-  geom_col(width = 0.70, colour = NA) +
-  facet_grid(Harvest + Water ~ Treatment) +
-  scale_y_continuous(
-    limits = c(0, 100.5),
-    breaks = c(0, 25, 50, 75, 100),
-    expand = expansion(mult = c(0, 0.02))
-  ) +
-  scale_fill_manual(values = genus_fig3_pal, drop = FALSE) +
-  guides(
-    fill = guide_legend(
-      ncol = 1,
-      byrow = TRUE,
-      override.aes = list(colour = NA)
+# Record the plotted percentages, coverage and the actual profiling source.
+readr::write_csv(
+  phy_ranked %>% dplyr::mutate(
+    Rank = dplyr::row_number(), Shown_in_panel_C = Phylum %in% top_phyla),
+  file.path(fig3_dir, "Figure3_Phylum_Ranking_Coverage.csv")
+)
+readr::write_csv(
+  phy_fig3 %>% dplyr::select(Treatment, Water, Harvest, Endophyte, Phylum, mean_pct),
+  file.path(fig3_dir, "Figure3_Phylum_Composition_By_Group.csv")
+)
+readr::write_csv(
+  phy_fig3 %>%
+    dplyr::group_by(Treatment, Water, Harvest, Endophyte) %>%
+    dplyr::summarise(
+      Other_pct = sum(mean_pct[as.character(Phylum) == "Other"]),
+      Unassigned_phylum_pct = sum(mean_pct[as.character(Phylum) == "Unassigned phylum"]),
+      .groups = "drop"),
+  file.path(fig3_dir, "Figure3_Phylum_Other_Percentage_By_Group.csv")
+)
+readr::write_csv(
+  tibble::tibble(
+    Figure_part = c("Main panel C", "Panels A/B/D and genus supplement"),
+    Taxonomic_rank = c("Phylum", "Genus"),
+    Source = c(phylum_source, "Bracken genus estimates"),
+    Input_path = c(phylum_input_path, genus_fp),
+    QC_retained_samples = nrow(meta_use),
+    Denominator = c(phylum_denominator, "Sum of QC-filtered genus counts within each sample"),
+    Excluded_phyla = c(paste(phylum_excluded_present, collapse = "; "), "See upstream host depletion"),
+    Displayed_named_taxa = c(length(top_phyla), length(top_genera_fig3))
+  ),
+  file.path(fig3_dir, "Figure3_Composition_Provenance.csv")
+)
+phylum_coverage_fig3 <- sum(phy_ranked$overall_pct[phy_ranked$Phylum %in% top_phyla])
+message(sprintf("Figure 3 C displays %d named phyla: %.1f%% of the mean profile.",
+                length(top_phyla), phylum_coverage_fig3))
+
+# Shared panel structure; genus names remain italic, phylum labels stay upright.
+make_composition_panel <- function(df, taxon_column, palette, subtitle_text,
+                                    rank_label, italic_names = FALSE) {
+  label_function <- if (italic_names) {
+    function(x) as.expression(lapply(x, function(label) {
+      if (label == "Other") bquote(plain(.(label))) else bquote(italic(.(label)))
+    }))
+  } else {
+    function(x) x
+  }
+  ggplot(df, aes(x = Endophyte_plot, y = mean_pct, fill = .data[[taxon_column]])) +
+    geom_col(width = 0.60, colour = NA) +
+    facet_grid(Harvest + Water ~ Treatment,
+      labeller = labeller(Harvest = c(
+        "During Drought" = "During", "Post Drought" = "Post"
+      ), Water = c("Irrigated" = "Irrigated", "Drought" = "Drought"))) +
+    scale_x_discrete(limits = c("Nil", "AR37")) +
+    scale_y_continuous(
+      limits = c(0, 100.5), breaks = c(0, 100),
+      expand = expansion(mult = c(0, 0.02))
+    ) +
+    scale_fill_manual(values = palette, drop = FALSE, labels = label_function) +
+    guides(fill = guide_legend(ncol = 4, byrow = TRUE, title = NULL,
+                              override.aes = list(colour = NA))) +
+    labs(title = "C", subtitle = subtitle_text, x = NULL,
+         y = "Mean relative abundance (%)", fill = rank_label) +
+    theme_natcom() +
+    theme(
+      axis.text.x = element_text(size = figure_pt(FIGURE_TEXT$axis), colour = "black"),
+      axis.text.y = element_text(size = figure_pt(FIGURE_TEXT$axis), colour = "black"),
+      axis.title.y = element_text(size = figure_pt(FIGURE_TEXT$axis_title), face = "bold"),
+      strip.text = element_text(size = figure_pt(FIGURE_TEXT$facet), face = "bold"),
+      legend.position = "bottom", legend.direction = "horizontal", legend.box = "horizontal",
+      legend.text = element_text(size = figure_pt(FIGURE_TEXT$legend)),
+      legend.title = element_text(size = figure_pt(FIGURE_TEXT$legend_title), face = "bold"),
+      legend.key.height = unit(figure_pt(8), "pt"),
+      legend.key.width = unit(figure_pt(8), "pt"),
+      plot.subtitle = element_text(size = figure_pt(FIGURE_TEXT$subtitle), face = "bold"),
+      strip.placement = "outside",
+      strip.text.y = element_text(size = figure_pt(7.5), face = "bold", angle = 90),
+      panel.spacing.y = unit(figure_pt(8), "pt"),
+      panel.spacing.x = unit(figure_pt(4), "pt")
     )
-  ) +
-  labs(
-    title = "C",
-    subtitle = "Dominant genus-level transcript profiles",
-    x = NULL,
-    y = "Mean relative abundance (%)",
-    fill = "Genus"
-  ) +
-  theme_natcom(12) +
-  theme(
-    axis.text.x = element_text(size = 10, colour = "black"),
-    axis.text.y = element_text(size = 10, colour = "black"),
-    axis.title.y = element_text(size = 12, face = "bold"),
-    strip.text = element_text(size = 10, face = "bold"),
-    legend.position = "right",
-    legend.direction = "vertical",
-    legend.box = "vertical",
-    legend.text = element_text(size = 8),
-    legend.title = element_text(size = 9, face = "bold"),
-    legend.key.height = unit(2.7, "mm"),
-    legend.key.width = unit(2.7, "mm"),
-    plot.subtitle = element_text(size = 12, face = "bold"),
-    panel.spacing = unit(3, "mm")
+}
+panel_genus <- make_composition_panel(
+  genus_fig3, "Genus2", genus_fig3_pal, "Genus-level transcript composition",
+  "Genus", italic_names = TRUE
+)
+# Panel C — phylum composition; A/B/D retain the full genus-level analysis.
+panel_c <- make_composition_panel(
+  phy_fig3, "Phylum", phy_pal[levels(phy_fig3$Phylum)],
+  "Phylum-level transcript composition", "Phylum"
+)
+phylum_legend_label_pt <- as.numeric(Sys.getenv("FIGURE3_PHYLUM_LABEL_PT", "7.25"))
+if (!is.finite(phylum_legend_label_pt) || phylum_legend_label_pt <= 0) {
+  stop("FIGURE3_PHYLUM_LABEL_PT must be positive.")
+}
+
+# Measure each candidate guide independently of the data area.
+fit_composition_legend <- function(plot_obj, width_limit, label_pt,
+                                    column_candidates = c(4L, 3L, 2L, 1L),
+                                    minimum_height = 0.65) {
+  plot_obj <- plot_obj + theme(
+    legend.text = element_text(size = figure_pt(label_pt)),
+    legend.key.height = unit(figure_pt(6), "pt"),
+    legend.key.width = unit(figure_pt(6), "pt"),
+    legend.spacing.y = unit(figure_pt(0.5), "pt"),
+    legend.direction = "horizontal", legend.box = "horizontal"
   )
+  for (columns in column_candidates) {
+    candidate <- plot_obj + guides(fill = guide_legend(
+      ncol = columns, byrow = TRUE, title = NULL,
+      override.aes = list(colour = NA)))
+    legend_grob <- figure_legend(candidate)
+    legend_width <- grid::convertWidth(grid::grobWidth(legend_grob), "in", valueOnly = TRUE)
+    if (is.finite(legend_width) && legend_width <= width_limit) break
+  }
+  if (!is.finite(legend_width) || legend_width > width_limit) {
+    stop("A taxon legend label exceeds the available width. Reduce its label size or increase export width.")
+  }
+  list(plot = candidate, grob = legend_grob, columns = columns,
+       height = max(minimum_height,
+         grid::convertHeight(grid::grobHeight(legend_grob), "in", valueOnly = TRUE) + 0.15))
+}
 
 # Panel D — PERMANOVA variance explained using full model + residual
 
@@ -1387,11 +1709,11 @@ panel_d <- ggplot(
   perm_plot_df,
   aes(x = Term_clean, y = R2, fill = significant)
 ) +
-  geom_col(width = 0.85) +
+  geom_col(width = 0.65) +
   geom_text(
     aes(label = label),
     hjust = -0.15,
-    size = 3.7
+    size = figure_mm(7.5)
   ) +
   coord_flip(clip = "off") +
   scale_fill_manual(
@@ -1408,60 +1730,240 @@ panel_d <- ggplot(
   ) +
   labs(
     title = "D",
-    subtitle = "Variance explained by PERMANOVA model terms",
+    subtitle = figure_subtitle("Variance explained by PERMANOVA model terms"),
     x = NULL,
     y = expression(R^2~"(variance explained)")
   ) +
-  theme_natcom(13) +
+  theme_natcom() +
   theme(
-    axis.text.y = element_text(size = 10, colour = "black"),
-    axis.text.x = element_text(size = 10, colour = "black"),
-    axis.title.x = element_text(size = 12, face = "bold"),
+    axis.text.y = element_text(size = figure_pt(FIGURE_TEXT$axis), colour = "black"),
+    axis.text.x = element_text(size = figure_pt(FIGURE_TEXT$axis), colour = "black"),
+    axis.title.x = element_text(size = figure_pt(FIGURE_TEXT$axis_title), face = "bold"),
     legend.position = "right",
-    legend.text = element_text(size = 9),
-    plot.subtitle = element_text(size = 12, face = "bold"),
-    plot.margin = margin(8, 35, 8, 8)
+    legend.text = element_text(size = figure_pt(FIGURE_TEXT$legend)),
+    plot.subtitle = element_text(size = figure_pt(FIGURE_TEXT$subtitle), face = "bold"),
+    plot.margin = margin(figure_pt(4), figure_pt(14), figure_pt(4), figure_pt(4))
   )
 
-# Assemble Figure 3
-top <- plot_grid(
-  panel_a,
-  panel_b,
-  nrow = 1,
-  rel_widths = c(1.1, 1)
+# Original arrangement: A/B above C/D. Move legends out of the data areas.
+panel_a <- panel_a + labs(colour = "Treatment") + guides(
+  colour = guide_legend(nrow = 1, title.position = "left", order = 1),
+  shape = guide_legend(nrow = 1, title.position = "left", order = 2)
+) + scale_x_continuous(n.breaks = 3) + scale_y_continuous(n.breaks = 3)
+panel_b <- panel_b + guides(
+  fill = guide_legend(nrow = 1, title.position = "left", order = 1),
+  shape = guide_legend(nrow = 1, title.position = "left", order = 2)
+) + scale_y_continuous(n.breaks = 3)
+legend_a <- figure_legend(panel_a)
+legend_b <- figure_legend(panel_b)
+top_body <- plot_grid(
+  panel_a + theme(legend.position = "none"),
+  panel_b + theme(legend.position = "none"),
+  nrow = 1, rel_widths = c(1.1, 1)
+)
+top_legends <- plot_grid(legend_a, legend_b, nrow = 1, rel_widths = c(1.1, 1))
+top <- plot_grid(top_body, top_legends, ncol = 1, rel_heights = c(2.35, 0.45))
+
+panel_c <- panel_c + theme(
+  axis.text = element_text(size = figure_pt(7.5)),
+  strip.text.x = element_text(size = figure_pt(8), face = "bold"),
+  strip.text.y = element_text(size = figure_pt(6), face = "bold", angle = 90,
+                              margin = margin(t = 0, r = 1, b = 0, l = 1)),
+  strip.text.y.right = element_text(size = figure_pt(6), face = "bold", angle = 90,
+                                    margin = margin(t = 0, r = 1, b = 0, l = 1))
+)
+composition_legend_fit <- fit_composition_legend(
+  panel_c, FIGURE_EXPORT_WIDTH_IN * 1.05 / 2.05 - 0.12,
+  phylum_legend_label_pt, column_candidates = c(3L, 2L, 1L)
+)
+panel_c <- composition_legend_fit$plot
+composition_legend <- composition_legend_fit$grob
+composition_legend_height <- composition_legend_fit$height
+legend_columns <- composition_legend_fit$columns
+
+# Leave numeric-axis padding beyond 0.6 and every bar-end annotation.
+permanova_axis_upper <- max(0.68, 1.35 * max(perm_plot_df$R2, na.rm = TRUE))
+
+# These shorter axis labels refer to exactly the same model terms.
+panel_d <- panel_d + scale_x_discrete(labels = function(x) stringr::str_replace_all(x, c(
+  "Seed treatment" = "Treatment", "Water regime" = "Water",
+  "Harvest stage" = "Harvest", "Unexplained variance" = "Residual"
+))) + labs(subtitle = "PERMANOVA model terms") +
+  theme(legend.position = "bottom", legend.direction = "horizontal",
+    axis.text.y = element_text(size = figure_pt(FIGURE_TEXT$dense)),
+    plot.margin = margin(figure_pt(3), figure_pt(10), figure_pt(3), figure_pt(5))) +
+  scale_y_continuous(
+    limits = c(0, permanova_axis_upper),
+    breaks = seq(0, permanova_axis_upper, by = 0.2),
+    expand = expansion(mult = 0)
+  ) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE))
+permanova_legend <- figure_legend(panel_d)
+permanova_legend_height <- max(
+  0.45,
+  grid::convertHeight(grid::grobHeight(permanova_legend), "in", valueOnly = TRUE) + 0.10
+)
+legend_band_height <- max(composition_legend_height, permanova_legend_height)
+bottom_body_height <- 3.40
+permanova <- plot_grid(panel_d + theme(legend.position = "none"), permanova_legend,
+                       ncol = 1,
+                       rel_heights = c(bottom_body_height, permanova_legend_height))
+# Keep the phylum legend inside C's column rather than below the full figure.
+# C retains room for full water labels; D is taller and aligns with C.
+# Legend heights are measured so smaller labels are not clipped at the bottom.
+composition <- plot_grid(
+  panel_c + theme(legend.position = "none"), composition_legend,
+  ncol = 1, rel_heights = c(bottom_body_height, legend_band_height)
+)
+if (legend_band_height > permanova_legend_height + 1e-6) {
+  permanova_column <- plot_grid(
+    permanova, NULL, ncol = 1,
+    rel_heights = c(bottom_body_height + permanova_legend_height,
+                   legend_band_height - permanova_legend_height)
+  )
+} else {
+  permanova_column <- permanova
+}
+bottom <- plot_grid(composition, permanova_column,
+                    nrow = 1, rel_widths = c(1.05, 1))
+FIGURE_EXPORT_HEIGHT_IN <- 2.80 + bottom_body_height + legend_band_height
+fig3 <- plot_grid(top, bottom, ncol = 1,
+                  rel_heights = c(2.80, bottom_body_height + legend_band_height))
+message(sprintf(
+  "Figure 3 export: %.2f x %.2f inches; phylum legend uses %d columns.",
+  FIGURE_EXPORT_WIDTH_IN, FIGURE_EXPORT_HEIGHT_IN, legend_columns
+))
+
+save_manuscript_figure(fig3, fig3_dir, "Figure3_NatCom_taxonomy")
+
+# Figure S4 follows the comprehensive A/B/C reference: one panel per treatment,
+# Irrigated/Drought columns, During/Post Drought rows and two legend columns at right.
+# Calibrate this wider figure's text separately so labels stay readable when resized.
+genus_supp_pt <- function(pt) {
+  pt * FIGURE_FONT_SCALE * genus_supp_width / FIGURE_DISPLAY_WIDTH_IN
+}
+
+make_genus_s4_panel <- function(treatment_label) {
+  ggplot(
+    dplyr::filter(genus_fig3, Treatment == treatment_label),
+    aes(x = Endophyte_plot, y = mean_pct, fill = Genus2)
+  ) +
+    geom_col(width = 0.80, colour = NA) +
+    facet_grid(Harvest ~ Water,
+      labeller = labeller(
+        Harvest = c("During Drought" = "During Drought", "Post Drought" = "Post Drought"),
+        Water = c("Irrigated" = "Irrigated", "Drought" = "Drought")
+      )) +
+    scale_x_discrete(limits = c("Nil", "AR37"), expand = expansion(add = 0.55)) +
+    scale_y_continuous(
+      limits = c(0, 100.5), breaks = c(0, 25, 50, 75, 100),
+      expand = expansion(mult = c(0, 0.02))
+    ) +
+    scale_fill_manual(values = genus_fig3_pal, drop = FALSE) +
+    labs(title = treatment_label, x = NULL, y = NULL) +
+    theme_classic(base_size = genus_supp_pt(8)) +
+    theme(
+      axis.text = element_text(size = genus_supp_pt(7.5), colour = "black"),
+      axis.text.x = element_text(size = genus_supp_pt(genus_x_label_pt), colour = "black"),
+      axis.title.y = element_text(size = genus_supp_pt(8.5),
+                                  margin = margin(r = genus_supp_pt(4))),
+      axis.line = element_line(linewidth = 0.30),
+      axis.ticks = element_line(linewidth = 0.30),
+      axis.ticks.length = unit(genus_supp_pt(2), "pt"),
+      strip.background = element_blank(), strip.clip = "off",
+      strip.text.x = element_text(size = genus_supp_pt(7.5), face = "bold"),
+      strip.text.y = element_text(size = genus_supp_pt(7.5), face = "bold", angle = 90),
+      panel.spacing.x = unit(genus_supp_pt(8), "pt"),
+      panel.spacing.y = unit(genus_supp_pt(10), "pt"),
+      plot.title = element_text(size = genus_supp_pt(9), face = "bold", hjust = 0.5),
+      plot.margin = margin(genus_supp_pt(10), genus_supp_pt(4),
+                           genus_supp_pt(4), genus_supp_pt(2)),
+      legend.position = "none"
+    )
+}
+
+# Use the existing italic genus labels and colour mapping for the shared legend.
+genus_supp_legend_plot <- panel_genus + labs(title = NULL) +
+  guides(fill = guide_legend(ncol = 2L, byrow = FALSE, title = NULL,
+                             override.aes = list(colour = NA))) +
+  theme(
+    legend.position = "right", legend.direction = "vertical", legend.box = "vertical",
+    legend.text = element_text(size = genus_supp_pt(genus_legend_label_pt)),
+    legend.key.height = unit(genus_supp_pt(6), "pt"),
+    legend.key.width = unit(genus_supp_pt(6), "pt"),
+    legend.spacing.y = unit(genus_supp_pt(0.2), "pt"),
+    legend.margin = margin(0, 0, 0, 0), legend.box.margin = margin(0, 0, 0, 0)
+  )
+genus_supp_legend <- figure_legend(genus_supp_legend_plot, position = "right")
+genus_supp_legend_width <- grid::convertWidth(
+  grid::grobWidth(genus_supp_legend), "in", valueOnly = TRUE) + 0.16
+genus_supp_legend_height <- grid::convertHeight(
+  grid::grobHeight(genus_supp_legend), "in", valueOnly = TRUE) + 0.20
+# Give the common y-axis title its own column instead of taking width from A.
+genus_supp_y_title <- grid::textGrob(
+  "Mean relative abundance (%)", rot = 90, y = grid::unit(0.46, "npc"),
+  gp = grid::gpar(fontsize = genus_supp_pt(8.5))
+)
+genus_supp_y_title_width <- grid::convertWidth(
+  grid::grobWidth(genus_supp_y_title), "in", valueOnly = TRUE) + 0.10
+genus_supp_gap <- 0.12
+genus_supp_plot_width <- genus_supp_width - genus_supp_legend_width -
+  genus_supp_gap - genus_supp_y_title_width
+if (!is.finite(genus_supp_plot_width) || genus_supp_plot_width < genus_supp_width * 0.50) {
+  stop(paste0("The two-column Figure S4 legend leaves too little room for the bars. ",
+              "Reduce FIGURE3_GENUS_LABEL_PT (for example, to 5.25)."))
+}
+genus_supp_content_height <- max(genus_supp_body_height, genus_supp_legend_height)
+genus_supp_height <- genus_supp_content_height + genus_supp_top_margin
+genus_supp_panels <- plot_grid(
+  make_genus_s4_panel("Control"),
+  make_genus_s4_panel("Polymer"), make_genus_s4_panel("6-PP"),
+  nrow = 1, rel_widths = c(1, 1, 1), align = "hv", axis = "tblr",
+  labels = c("A", "B", "C"),
+  label_size = genus_supp_pt(11), label_fontface = "bold",
+  label_x = 0, label_y = 1, hjust = 0, vjust = 1
+)
+genus_supp_figure <- plot_grid(
+  genus_supp_y_title, genus_supp_panels, NULL, genus_supp_legend, nrow = 1,
+  rel_widths = c(genus_supp_y_title_width, genus_supp_plot_width,
+                 genus_supp_gap, genus_supp_legend_width)
+)
+# Increase the canvas height for the top margin instead of compressing the bars.
+if (genus_supp_top_margin > 0) {
+  genus_supp_figure <- plot_grid(
+    NULL, genus_supp_figure, ncol = 1,
+    rel_heights = c(genus_supp_top_margin, genus_supp_content_height)
+  )
+}
+message(sprintf(
+  "Figure S4 export: %.2f x %.2f inches; equal Control/Polymer/6-PP plotting widths and a two-column genus legend at right.",
+  genus_supp_width, genus_supp_height
+))
+# Retain the existing output filename for the standalone genus composition.
+save_manuscript_figure(
+  genus_supp_figure, fig3_dir, "Figure3_Genus_Composition_Supplement",
+  width = genus_supp_width, height = genus_supp_height
 )
 
-bottom <- plot_grid(
-  panel_c,
-  panel_d,
-  nrow = 1,
-  rel_widths = c(0.85, 1.15)
+# Caption notes identify the different ranks and profiling sources explicitly.
+caption_notes <- c(
+  "Panels A, B and D remain based on QC-filtered Bracken genus-level transcript profiles.",
+  paste0("Panel C: Phylum-level relative composition of microbial transcripts. Bars show mean ",
+         "within-sample percentages grouped by seed treatment, water regime, harvest and endophyte status. ",
+         "The ", length(top_phyla), " most abundant named phyla are shown; remaining phyla are pooled as Other. ",
+         if ("Unassigned phylum" %in% phy_legend_order) "Unassigned phylum is displayed separately. " else ""),
+  paste0("Panel C data source: ", phylum_source, "."),
+  paste0("Panel C denominator: ", phylum_denominator, "."),
+  paste0("Named phyla excluded from the phylum table: ",
+         if (length(phylum_excluded_present)) paste(phylum_excluded_present, collapse = ", ") else "none", "."),
+  paste0("All panels use the same ", nrow(meta_use), " QC-retained samples and the same metadata."),
+  paste0("Supplementary Figure S4: the ", length(top_genera_fig3),
+         " most abundant genera plus Other, with italic genus names. ",
+         "Panels A-C show Control, Polymer and 6-PP, respectively. ",
+         "Columns show Irrigated/Drought and rows show During/Post Drought; ",
+         "the shared legend has two columns on the right. ",
+         "Use this supplementary figure for genus-specific statements in the manuscript.")
 )
-
-fig3 <- plot_grid(
-  top,
-  bottom,
-  ncol = 1,
-  rel_heights = c(0.95, 1.25)
-)
-
-ggsave(
-  file.path(fig3_dir, "Figure3_NatCom_taxonomy.pdf"),
-  fig3,
-  width = 20,
-  height = 13,
-  useDingbats = FALSE,
-  limitsize = FALSE
-)
-
-ggsave(
-  file.path(fig3_dir, "Figure3_NatCom_taxonomy.png"),
-  fig3,
-  width = 20,
-  height = 13,
-  dpi = 600,
-  limitsize = FALSE
-)
-
-message("Figure 3 saved to: ", fig3_dir)
-
+writeLines(caption_notes, file.path(fig3_dir, "Figure3_Composition_Caption_Notes.txt"))
+message("Figure 3 and the genus composition supplement saved to: ", fig3_dir)
+message("Updated Figure S4: Figure3_Genus_Composition_Supplement_LargeLabels (.pdf, .png, .tiff).")

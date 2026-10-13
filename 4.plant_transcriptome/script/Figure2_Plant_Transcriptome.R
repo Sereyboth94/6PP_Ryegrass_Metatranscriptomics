@@ -1,3 +1,93 @@
+# ============================================================================
+# Larger labels for the final, assembled manuscript figure
+# Layout revision: 2026-10-12 (wider exports, explicit ticks and edge padding)
+# Text sizes retain the previous export calibration as the canvas widens.
+# The PDF, PNG and LZW-compressed TIFF use the same layout; rasters use 600 dpi.
+# Change MANUSCRIPT_FONT_SCALE to 1.10 for a further 10% increase.
+# MANUSCRIPT_PROJECT_ROOT optionally overrides the original Windows project path.
+# ============================================================================
+FIGURE_DISPLAY_WIDTH_IN <- as.numeric(Sys.getenv("MANUSCRIPT_FIGURE_WIDTH_IN", "6.27"))
+FIGURE_EXPORT_WIDTH_IN <- as.numeric(Sys.getenv("MANUSCRIPT_EXPORT_WIDTH_IN", "8.0"))
+# Keep the previous exported text and symbol sizes as the canvas widens.
+FIGURE_REFERENCE_WIDTH_IN <- 7.1
+FIGURE_EXPORT_HEIGHT_IN <- 8.05
+FIGURE_REVISION <- "2026-10-12 wider-export update"
+message("Figure 2: ", FIGURE_REVISION)
+FIGURE_FONT_SCALE <- as.numeric(Sys.getenv("MANUSCRIPT_FONT_SCALE", "1.0"))
+# Reduce points and line keys by 20%; text remains independently sized.
+FIGURE_SYMBOL_SCALE <- as.numeric(Sys.getenv("MANUSCRIPT_SYMBOL_SCALE", "0.80"))
+
+if (any(!is.finite(c(FIGURE_EXPORT_WIDTH_IN, FIGURE_DISPLAY_WIDTH_IN, FIGURE_FONT_SCALE, FIGURE_SYMBOL_SCALE))) ||
+    any(c(FIGURE_EXPORT_WIDTH_IN, FIGURE_DISPLAY_WIDTH_IN, FIGURE_FONT_SCALE, FIGURE_SYMBOL_SCALE) <= 0)) {
+  stop("Export width, manuscript width, font scale and symbol scale must be positive numbers.")
+}
+
+FIGURE_TEXT <- list(
+  axis = 9, axis_title = 9.5, facet = 8.5,
+  legend = 8, legend_title = 8.5,
+  subtitle = 9, panel = 12, annotation = 8.5, dense = 8
+)
+
+# Themes use points; geom_text/geom_label use millimetres.
+figure_pt <- function(pt) {
+  pt * FIGURE_FONT_SCALE * FIGURE_REFERENCE_WIDTH_IN / FIGURE_DISPLAY_WIDTH_IN
+}
+figure_mm <- function(pt) figure_pt(pt) / (72.27 / 25.4)
+figure_symbol <- function(mm) {
+  mm * FIGURE_SYMBOL_SCALE * FIGURE_REFERENCE_WIDTH_IN / FIGURE_DISPLAY_WIDTH_IN
+}
+figure_subtitle <- function(x, width = 32) stringr::str_wrap(x, width = width)
+
+# Extract a single legend without reserving space inside the data panel.
+# Supports both the older guide-box and the newer position-specific guide boxes.
+figure_legend <- function(plot_obj, position = "bottom") {
+  table <- ggplot2::ggplotGrob(
+    plot_obj + ggplot2::theme(legend.position = position)
+  )
+  index <- which(table$layout$name == paste0("guide-box-", position))
+  if (!length(index)) index <- which(table$layout$name == "guide-box")
+  if (length(index)) {
+    index <- index[!vapply(table$grobs[index], inherits, logical(1), "zeroGrob")]
+  }
+  if (!length(index)) return(grid::nullGrob())
+  table$grobs[[index[1L]]]
+}
+
+save_manuscript_figure <- function(plot_obj, out_path, stem) {
+  dir.create(out_path, recursive = TRUE, showWarnings = FALSE)
+  stem <- paste0(stem, "_LargeLabels")
+  pdf_fp <- file.path(out_path, paste0(stem, ".pdf"))
+
+  # Cairo embeds the system fonts when this device is available.
+  if (isTRUE(capabilities("cairo"))) {
+    ggplot2::ggsave(
+      pdf_fp, plot_obj, device = grDevices::cairo_pdf,
+      width = FIGURE_EXPORT_WIDTH_IN, height = FIGURE_EXPORT_HEIGHT_IN,
+      units = "in", bg = "white", limitsize = FALSE
+    )
+  } else {
+    ggplot2::ggsave(
+      pdf_fp, plot_obj, device = grDevices::pdf, useDingbats = FALSE,
+      width = FIGURE_EXPORT_WIDTH_IN, height = FIGURE_EXPORT_HEIGHT_IN,
+      units = "in", bg = "white", limitsize = FALSE
+    )
+    message("Cairo is unavailable; used the standard PDF device for ", pdf_fp)
+  }
+
+  ggplot2::ggsave(
+    file.path(out_path, paste0(stem, ".png")), plot_obj,
+    width = FIGURE_EXPORT_WIDTH_IN, height = FIGURE_EXPORT_HEIGHT_IN,
+    units = "in", dpi = 600, bg = "white", limitsize = FALSE
+  )
+  ggplot2::ggsave(
+    file.path(out_path, paste0(stem, ".tiff")), plot_obj,
+    device = grDevices::tiff, compression = "lzw",
+    width = FIGURE_EXPORT_WIDTH_IN, height = FIGURE_EXPORT_HEIGHT_IN,
+    units = "in", dpi = 600, bg = "white", limitsize = FALSE
+  )
+  message("Saved larger-label PDF, PNG and 600-dpi TIFF to: ", out_path)
+}
+
 ###############################################################################
 # 🧬 Publication-ready RNA-seq Transcriptomics Pipeline
 # Ryegrass × Water × Treatment × Harvest
@@ -50,7 +140,7 @@ library(clusterProfiler)
 # ─────────────────────────────────────────────────────────────────────────────
 # 2️⃣ Define project paths and input files
 # ─────────────────────────────────────────────────────────────────────────────
-project_dir <- "C:/Users/soths/OneDrive - Lincoln University/Writing/NatMicro/github"
+project_dir <- Sys.getenv("MANUSCRIPT_PROJECT_ROOT", "C:/Users/soths/OneDrive - Lincoln University/Writing/NatMicro/github")
 
 data_dir <- file.path(project_dir, "4.plant_transcriptome", "data")
 out_dir  <- file.path(project_dir, "4.plant_transcriptome", "results")
@@ -1067,20 +1157,40 @@ suppressPackageStartupMessages({
 fig2_dir <- file.path(project_dir, "7.manuscript_figure", "3.figure2")
 dir.create(fig2_dir, recursive = TRUE, showWarnings = FALSE)
 
-theme_natcom <- function(base_size = 15) {
-  theme_classic(base_size = base_size) +
+theme_natcom <- function(base_size = FIGURE_TEXT$axis) {
+  theme_classic(base_size = figure_pt(base_size), base_family = "sans") +
     theme(
-      axis.title = element_text(face = "bold", colour = "black", size = base_size),
-      axis.text = element_text(colour = "black", size = base_size - 2),
+      axis.title = element_text(size = figure_pt(FIGURE_TEXT$axis_title),
+                                face = "bold", colour = "black"),
+      axis.text = element_text(size = figure_pt(FIGURE_TEXT$axis), colour = "black"),
       strip.background = element_rect(fill = "grey95", colour = "grey70"),
-      strip.text = element_text(face = "bold", colour = "black", size = base_size - 1),
-      legend.title = element_text(face = "bold", size = base_size - 1),
-      legend.text = element_text(size = base_size - 2),
-      plot.title = element_text(face = "bold", hjust = 0, size = base_size + 3),
-      plot.subtitle = element_text(face = "bold", hjust = 0, size = base_size - 1),
-      plot.margin = margin(8, 8, 8, 8)
+      strip.text = element_text(size = figure_pt(FIGURE_TEXT$facet),
+                                face = "bold", colour = "black"),
+      legend.title = element_text(size = figure_pt(FIGURE_TEXT$legend_title),
+                                  face = "bold"),
+      legend.text = element_text(size = figure_pt(FIGURE_TEXT$legend), colour = "black"),
+      legend.position = "bottom",
+      legend.direction = "horizontal",
+      legend.box = "vertical",
+      legend.key.size = unit(figure_pt(8), "pt"),
+      legend.spacing.y = unit(figure_pt(2), "pt"),
+      legend.box.spacing = unit(figure_pt(2), "pt"),
+      plot.title = element_text(size = figure_pt(FIGURE_TEXT$panel), face = "bold", hjust = 0),
+      plot.subtitle = element_text(size = figure_pt(FIGURE_TEXT$subtitle),
+                                   face = "bold", hjust = 0, lineheight = 1.05,
+                                   margin = margin(b = figure_pt(2))),
+      plot.title.position = "plot",
+      legend.margin = margin(0, 0, 0, 0),
+      panel.spacing = unit(figure_pt(4), "pt"),
+      plot.margin = margin(figure_pt(3), figure_pt(3), figure_pt(3), figure_pt(3))
     )
 }
+
+# Use the same PC1 range for both harvests and both endophyte facets.
+# All scores remain inside the limits, with space beyond the labelled ticks.
+pca_x_breaks <- c(-50, 0, 50)
+pca_x_range <- range(c(pcaData$PC1, pca_x_breaks), na.rm = TRUE)
+pca_x_limits <- pca_x_range + c(-1, 1) * diff(pca_x_range) * 0.10
 
 # PCA helper
 make_pca_panel <- function(harvest_level, panel_letter) {
@@ -1089,8 +1199,10 @@ make_pca_panel <- function(harvest_level, panel_letter) {
     pcaData %>% dplyr::filter(Harvest == harvest_level),
     aes(x = PC1, y = PC2, colour = Treatment, shape = Water)
   ) +
-    geom_point(size = 4, alpha = 0.9) +
+    geom_point(size = figure_symbol(2.0), alpha = 0.9) +
     facet_wrap(~ Ryegrass, nrow = 1) +
+    scale_x_continuous(limits = pca_x_limits, breaks = pca_x_breaks,
+                       expand = expansion(mult = 0)) +
     scale_colour_manual(values = c(
       "Control" = "#F8766D",
       "Polymer" = "#00BA38",
@@ -1098,24 +1210,27 @@ make_pca_panel <- function(harvest_level, panel_letter) {
     )) +
     labs(
       title = panel_letter,
-      subtitle = harvest_level,
-      x = paste0("PC1: ", percentVar[1], "% variance"),
-      y = paste0("PC2: ", percentVar[2], "% variance"),
+      subtitle = figure_subtitle(harvest_level),
+      x = paste0("PC1 (", percentVar[1], "%)"),
+      y = paste0("PC2 (", percentVar[2], "%)"),
       colour = "Seed treatment",
       shape = "Water"
     ) +
-    theme_natcom(15) +
+    theme_natcom() +
     theme(
-      plot.subtitle = element_text(face = "bold", size = 14, hjust = 0),
-      legend.position = "right"
+      plot.subtitle = element_text(face = "bold", size = figure_pt(FIGURE_TEXT$subtitle), hjust = 0),
+      legend.position = "bottom",
+      panel.spacing.x = unit(figure_pt(8), "pt"),
+      plot.margin = margin(figure_pt(3), figure_pt(8), figure_pt(3), figure_pt(5))
     )
 }
 
 panel_a <- make_pca_panel("During Drought", "A")
 panel_b <- make_pca_panel("Post Drought", "B")
 
-# Volcano helper
-make_natcom_volcano <- function(res_df, panel_letter, subtitle_text, label_n = 8) {
+# Main volcano panels omit gene-name annotations; all points remain.
+# Annotated supplementary plots and gene tables are unchanged.
+make_natcom_volcano <- function(res_df, panel_letter, subtitle_text) {
   
   plot_df <- res_df %>%
     dplyr::mutate(
@@ -1128,39 +1243,27 @@ make_natcom_volcano <- function(res_df, panel_letter, subtitle_text, label_n = 8
       )
     )
   
-  top_labels <- plot_df %>%
-    dplyr::filter(!is.na(padj), padj < 0.05) %>%
-    dplyr::arrange(padj) %>%
-    dplyr::slice_head(n = label_n)
-  
   ggplot(plot_df, aes(x = log2FoldChange, y = neglog10_padj, colour = significance)) +
-    geom_point(size = 1.8, alpha = 0.7) +
+    geom_point(size = figure_symbol(0.9), alpha = 0.7) +
     geom_vline(xintercept = c(-1, 1), linetype = "dashed", linewidth = 0.45) +
     geom_hline(yintercept = -log10(0.05), linetype = "dashed", linewidth = 0.45) +
-    ggrepel::geom_text_repel(
-      data = top_labels,
-      aes(label = Display),
-      size = 3.4,
-      max.overlaps = 50,
-      box.padding = 0.35,
-      point.padding = 0.25,
-      segment.color = "grey50"
-    ) +
     scale_colour_manual(values = c(
       "Upregulated" = "red",
       "Downregulated" = "blue",
       "Not significant" = "grey70"
     )) +
+    scale_x_continuous(n.breaks = 4, expand = expansion(mult = 0.15)) +
+    scale_y_continuous(n.breaks = 4, expand = expansion(mult = c(0.02, 0.10))) +
     labs(
       title = panel_letter,
-      subtitle = subtitle_text,
+      subtitle = figure_subtitle(subtitle_text),
       x = expression(log[2]~fold~change),
       y = expression(-log[10]~adjusted~italic(P)),
       colour = "Significance"
     ) +
-    theme_natcom(15) +
+    theme_natcom() +
     theme(
-      legend.position = "right"
+      legend.position = "bottom"
     )
 }
 
@@ -1182,12 +1285,12 @@ make_go_dotplot <- function(go_df, panel_letter, subtitle_text, show_n = 10) {
   if (is.null(go_df) || nrow(go_df) == 0) {
     return(
       ggplot() +
-        annotate("text", x = 0, y = 0, label = "No enriched GO terms", size = 6) +
-        labs(title = panel_letter, subtitle = subtitle_text) +
+        annotate("text", x = 0, y = 0, label = "No enriched GO terms", size = figure_mm(9)) +
+        labs(title = panel_letter, subtitle = figure_subtitle(subtitle_text)) +
         theme_void() +
         theme(
-          plot.title = element_text(face = "bold", size = 18, hjust = 0),
-          plot.subtitle = element_text(face = "bold", size = 14, hjust = 0)
+          plot.title = element_text(face = "bold", size = figure_pt(FIGURE_TEXT$panel), hjust = 0),
+          plot.subtitle = element_text(face = "bold", size = figure_pt(FIGURE_TEXT$subtitle), hjust = 0)
         )
     )
   }
@@ -1196,14 +1299,31 @@ make_go_dotplot <- function(go_df, panel_letter, subtitle_text, show_n = 10) {
     dplyr::arrange(p.adjust) %>%
     dplyr::slice_head(n = show_n) %>%
     dplyr::mutate(
-      Description = stringr::str_wrap(Description, width = 20),
+      Description = stringr::str_wrap(Description, width = 48),
       Description = factor(Description, levels = rev(Description)),
       GeneRatio_num = sapply(
         strsplit(GeneRatio, "/"),
         function(x) as.numeric(x[1]) / as.numeric(x[2])
       )
     )
-  
+
+  count_values <- sort(unique(plot_df$Count))
+  count_breaks <- unique(as.numeric(stats::quantile(
+    count_values, probs = c(0, 0.5, 1), type = 1, names = FALSE
+  )))
+
+  # Explicit display limits and decimal labels also handle one unique gene ratio.
+  # This does not modify any GO gene ratio, count or adjusted P value.
+  ratio_limits <- range(plot_df$GeneRatio_num, na.rm = TRUE)
+  if (diff(ratio_limits) == 0) {
+    ratio_limits <- c(0, max(ratio_limits[2] * 1.20, 0.01))
+  } else {
+    ratio_limits <- ratio_limits + c(-1, 1) * diff(ratio_limits) * 0.12
+    ratio_limits[1] <- max(0, ratio_limits[1])
+  }
+  ratio_breaks <- pretty(ratio_limits, n = 3)
+  ratio_breaks <- ratio_breaks[ratio_breaks >= ratio_limits[1] & ratio_breaks <= ratio_limits[2]]
+
   ggplot(
     plot_df,
     aes(
@@ -1217,46 +1337,52 @@ make_go_dotplot <- function(go_df, panel_letter, subtitle_text, show_n = 10) {
     scale_colour_gradient(
       low = "red",
       high = "blue",
-      name = "Adjusted P"
+      name = "Adjusted P",
+      breaks = scales::breaks_pretty(n = 2),
+      labels = scales::label_scientific(digits = 1)
     ) +
     scale_size_continuous(
       name = "Gene count",
-      range = c(4, 9)
+      breaks = count_breaks,
+      range = figure_symbol(c(1.5, 3.0))
     ) +
     labs(
       title = panel_letter,
-      subtitle = subtitle_text,
+      subtitle = figure_subtitle(subtitle_text),
       x = "Gene ratio",
       y = NULL
     ) +
-    theme_natcom(16) +
+    scale_x_continuous(limits = ratio_limits, breaks = ratio_breaks,
+                       labels = scales::label_number(accuracy = 0.01),
+                       expand = expansion(mult = 0)) +
+    theme_natcom() +
     theme(
       axis.text.y = element_text(
-        size = 13,
+        size = figure_pt(FIGURE_TEXT$dense),
         colour = "black",
-        hjust = 1
+        hjust = 1, lineheight = 0.95
       ),
       axis.text.x = element_text(
-        size = 12,
+        size = figure_pt(FIGURE_TEXT$axis),
         colour = "black"
       ),
       axis.title.x = element_text(
-        size = 14,
+        size = figure_pt(FIGURE_TEXT$axis_title),
         face = "bold"
       ),
       legend.title = element_text(
-        size = 13,
+        size = figure_pt(FIGURE_TEXT$legend_title),
         face = "bold"
       ),
       legend.text = element_text(
-        size = 11
+        size = figure_pt(FIGURE_TEXT$legend)
       ),
       plot.subtitle = element_text(
-        size = 14,
+        size = figure_pt(FIGURE_TEXT$subtitle),
         face = "bold"
       ),
-      legend.position = "right",
-      plot.margin = margin(6, 8, 6, 4)
+      legend.position = "bottom",
+      plot.margin = margin(figure_pt(3), figure_pt(3), figure_pt(3), figure_pt(3))
     )
 }
 
@@ -1278,67 +1404,57 @@ panel_f <- make_go_dotplot(
 # Assemble Figure 2
 #################################################
 
-top <- plot_grid(
-  
-  panel_a,
-  panel_b,
-  
-  nrow = 1,
-  
-  rel_widths = c(1,1)
-  
+# Shared PCA and volcano legends leave the full row height for the data panels.
+pca_legend_plot <- panel_a + guides(
+  colour = guide_legend(nrow = 1, title.position = "left", order = 1),
+  shape = guide_legend(nrow = 1, title.position = "left", order = 2)
+) + theme(legend.position = "bottom", legend.box = "horizontal")
+pca_legend <- figure_legend(pca_legend_plot)
+panel_a <- panel_a + theme(legend.position = "none") +
+  scale_y_continuous(n.breaks = 3)
+panel_b <- panel_b + theme(legend.position = "none") +
+  scale_y_continuous(n.breaks = 3)
+top_body <- plot_grid(panel_a, panel_b, nrow = 1, rel_widths = c(1, 1))
+top <- plot_grid(top_body, pca_legend, ncol = 1, rel_heights = c(2.25, 0.30))
+
+volcano_legend <- figure_legend(
+  panel_c + guides(colour = guide_legend(nrow = 1, title.position = "left"))
 )
+panel_c <- panel_c + theme(legend.position = "none") +
+  labs(subtitle = "6-PP vs Control: during drought")
+panel_d <- panel_d + theme(legend.position = "none") +
+  labs(subtitle = "6-PP vs Control: post drought")
+middle_body <- plot_grid(panel_c, panel_d, nrow = 1, rel_widths = c(1, 1))
+middle <- plot_grid(middle_body, volcano_legend, ncol = 1, rel_heights = c(2.55, 0.30))
 
-
-middle <- plot_grid(
-  
-  panel_c,
-  panel_d,
-  
-  nrow = 1,
-  
-  rel_widths = c(1,1)
-  
+# GO legends are kept below their panels, with only three gene-count keys.
+# Up to ten selected terms and all plotted genes are retained.
+# The original A/B, C/D, E/F arrangement is unchanged.
+go_guides <- guides(
+  colour = guide_colourbar(direction = "horizontal", title.position = "top",
+    barwidth = unit(figure_pt(70), "pt"), barheight = unit(figure_pt(6), "pt")),
+  size = guide_legend(nrow = 1, title.position = "top")
 )
-
-
-bottom <- plot_grid(
-  
-  panel_e,
-  panel_f,
-  
-  nrow = 1,
-  
-  rel_widths = c(0.75,0.75)
-  
+panel_e <- panel_e + go_guides +
+  labs(subtitle = "GO enrichment: during drought") +
+  theme(legend.position = "bottom", legend.box = "horizontal", legend.direction = "horizontal")
+panel_f <- panel_f + go_guides +
+  labs(subtitle = "GO enrichment: post drought") +
+  theme(legend.position = "bottom", legend.box = "horizontal", legend.direction = "horizontal")
+go_legend_e <- figure_legend(panel_e)
+go_legend_f <- figure_legend(panel_f)
+bottom_body <- plot_grid(
+  panel_e + theme(legend.position = "none"),
+  panel_f + theme(legend.position = "none"),
+  nrow = 1, rel_widths = c(1.15, 0.85)
 )
+bottom_legends <- plot_grid(go_legend_e, go_legend_f, nrow = 1, rel_widths = c(1.15, 0.85))
+bottom <- plot_grid(bottom_body, bottom_legends, ncol = 1, rel_heights = c(2.20, 0.45))
+fig2 <- plot_grid(top, middle, bottom, ncol = 1, rel_heights = c(2.55, 2.85, 2.65))
+
+save_manuscript_figure(fig2, fig2_dir, "Figure2_NatCom")
 
 
-fig2 <- plot_grid(
-  top,
-  middle,
-  bottom,
-  ncol = 1,
-  rel_heights = c(0.95, 0.95, 1.15)
-)
-
-ggsave(
-  filename = file.path(fig2_dir, "Figure2_NatCom.pdf"),
-  plot = fig2,
-  width = 20,
-  height = 16,
-  useDingbats = FALSE,
-  limitsize = FALSE
-)
-
-ggsave(
-  filename = file.path(fig2_dir, "Figure2_NatCom.png"),
-  plot = fig2,
-  width = 20,
-  height = 16,
-  dpi = 600,
-  limitsize = FALSE
-)
 
 write.csv(
   de_summary,

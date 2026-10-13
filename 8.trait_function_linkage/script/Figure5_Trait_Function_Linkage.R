@@ -1,3 +1,93 @@
+# ============================================================================
+# Larger labels for the final, assembled manuscript figure
+# Layout revision: 2026-10-12 (wider exports, explicit ticks and edge padding)
+# Text sizes retain the previous export calibration as the canvas widens.
+# The PDF, PNG and LZW-compressed TIFF use the same layout; rasters use 600 dpi.
+# Change MANUSCRIPT_FONT_SCALE to 1.10 for a further 10% increase.
+# MANUSCRIPT_PROJECT_ROOT optionally overrides the original Windows project path.
+# ============================================================================
+FIGURE_DISPLAY_WIDTH_IN <- as.numeric(Sys.getenv("MANUSCRIPT_FIGURE_WIDTH_IN", "6.27"))
+FIGURE_EXPORT_WIDTH_IN <- as.numeric(Sys.getenv("MANUSCRIPT_EXPORT_WIDTH_IN", "8.0"))
+# Keep the previous exported text and symbol sizes as the canvas widens.
+FIGURE_REFERENCE_WIDTH_IN <- 7.6
+FIGURE_EXPORT_HEIGHT_IN <- 6.0
+FIGURE_REVISION <- "2026-10-12 wider-export update"
+message("Figure 5: ", FIGURE_REVISION)
+FIGURE_FONT_SCALE <- as.numeric(Sys.getenv("MANUSCRIPT_FONT_SCALE", "1.0"))
+# Reduce points and line keys by 20%; text remains independently sized.
+FIGURE_SYMBOL_SCALE <- as.numeric(Sys.getenv("MANUSCRIPT_SYMBOL_SCALE", "0.80"))
+
+if (any(!is.finite(c(FIGURE_EXPORT_WIDTH_IN, FIGURE_DISPLAY_WIDTH_IN, FIGURE_FONT_SCALE, FIGURE_SYMBOL_SCALE))) ||
+    any(c(FIGURE_EXPORT_WIDTH_IN, FIGURE_DISPLAY_WIDTH_IN, FIGURE_FONT_SCALE, FIGURE_SYMBOL_SCALE) <= 0)) {
+  stop("Export width, manuscript width, font scale and symbol scale must be positive numbers.")
+}
+
+FIGURE_TEXT <- list(
+  axis = 9, axis_title = 9.5, facet = 8.5,
+  legend = 8, legend_title = 8.5,
+  subtitle = 9, panel = 12, annotation = 8.5, dense = 8
+)
+
+# Themes use points; geom_text/geom_label use millimetres.
+figure_pt <- function(pt) {
+  pt * FIGURE_FONT_SCALE * FIGURE_REFERENCE_WIDTH_IN / FIGURE_DISPLAY_WIDTH_IN
+}
+figure_mm <- function(pt) figure_pt(pt) / (72.27 / 25.4)
+figure_symbol <- function(mm) {
+  mm * FIGURE_SYMBOL_SCALE * FIGURE_REFERENCE_WIDTH_IN / FIGURE_DISPLAY_WIDTH_IN
+}
+figure_subtitle <- function(x, width = 32) stringr::str_wrap(x, width = width)
+
+# Extract a single legend without reserving space inside the data panel.
+# Supports both the older guide-box and the newer position-specific guide boxes.
+figure_legend <- function(plot_obj, position = "bottom") {
+  table <- ggplot2::ggplotGrob(
+    plot_obj + ggplot2::theme(legend.position = position)
+  )
+  index <- which(table$layout$name == paste0("guide-box-", position))
+  if (!length(index)) index <- which(table$layout$name == "guide-box")
+  if (length(index)) {
+    index <- index[!vapply(table$grobs[index], inherits, logical(1), "zeroGrob")]
+  }
+  if (!length(index)) return(grid::nullGrob())
+  table$grobs[[index[1L]]]
+}
+
+save_manuscript_figure <- function(plot_obj, out_path, stem) {
+  dir.create(out_path, recursive = TRUE, showWarnings = FALSE)
+  stem <- paste0(stem, "_LargeLabels")
+  pdf_fp <- file.path(out_path, paste0(stem, ".pdf"))
+
+  # Cairo embeds the system fonts when this device is available.
+  if (isTRUE(capabilities("cairo"))) {
+    ggplot2::ggsave(
+      pdf_fp, plot_obj, device = grDevices::cairo_pdf,
+      width = FIGURE_EXPORT_WIDTH_IN, height = FIGURE_EXPORT_HEIGHT_IN,
+      units = "in", bg = "white", limitsize = FALSE
+    )
+  } else {
+    ggplot2::ggsave(
+      pdf_fp, plot_obj, device = grDevices::pdf, useDingbats = FALSE,
+      width = FIGURE_EXPORT_WIDTH_IN, height = FIGURE_EXPORT_HEIGHT_IN,
+      units = "in", bg = "white", limitsize = FALSE
+    )
+    message("Cairo is unavailable; used the standard PDF device for ", pdf_fp)
+  }
+
+  ggplot2::ggsave(
+    file.path(out_path, paste0(stem, ".png")), plot_obj,
+    width = FIGURE_EXPORT_WIDTH_IN, height = FIGURE_EXPORT_HEIGHT_IN,
+    units = "in", dpi = 600, bg = "white", limitsize = FALSE
+  )
+  ggplot2::ggsave(
+    file.path(out_path, paste0(stem, ".tiff")), plot_obj,
+    device = grDevices::tiff, compression = "lzw",
+    width = FIGURE_EXPORT_WIDTH_IN, height = FIGURE_EXPORT_HEIGHT_IN,
+    units = "in", dpi = 600, bg = "white", limitsize = FALSE
+  )
+  message("Saved larger-label PDF, PNG and 600-dpi TIFF to: ", out_path)
+}
+
 ###############################################################################
 # Figure 5 — Nature Communications
 # Linking microbial pathways with plant performance
@@ -8,8 +98,9 @@
 #   C = conceptual model linking 6-PP seed coating to drought recovery
 #
 # Outputs:
-#   Figure5_NatCom_linking.pdf
-#   Figure5_NatCom_linking.png
+#   Figure5_NatCom_linking_LargeLabels.pdf
+#   Figure5_NatCom_linking_LargeLabels.png
+#   Figure5_NatCom_linking_LargeLabels.tiff
 #   Figure5_trait_pathway_correlations.csv
 #   Figure5_trait_table_used.csv
 #   Figure5_pathway_matrix_used.csv
@@ -39,7 +130,7 @@ suppressPackageStartupMessages({
 # 1. Paths and analysis settings
 # ─────────────────────────────────────────────────────────────────────────────
 
-project_root <- "C:/Users/soths/OneDrive - Lincoln University/Writing/NatMicro/github"
+project_root <- Sys.getenv("MANUSCRIPT_PROJECT_ROOT", "C:/Users/soths/OneDrive - Lincoln University/Writing/NatMicro/github")
 
 # Input files used by the HUMAnN4 microbial-function pipeline
 function_data_dir <- file.path(project_root, "6.microbial_function", "data")
@@ -78,18 +169,32 @@ network_abs_rho_cutoff <- 0.35
 # 2. Theme and colours
 # ─────────────────────────────────────────────────────────────────────────────
 
-theme_natcom <- function(base_size = 15) {
-  theme_classic(base_size = base_size) +
+theme_natcom <- function(base_size = FIGURE_TEXT$axis) {
+  theme_classic(base_size = figure_pt(base_size), base_family = "sans") +
     theme(
-      axis.title = element_text(face = "bold", colour = "black"),
-      axis.text = element_text(colour = "black"),
+      axis.title = element_text(size = figure_pt(FIGURE_TEXT$axis_title),
+                                face = "bold", colour = "black"),
+      axis.text = element_text(size = figure_pt(FIGURE_TEXT$axis), colour = "black"),
       strip.background = element_rect(fill = "grey95", colour = "grey70"),
-      strip.text = element_text(face = "bold", colour = "black"),
-      legend.title = element_text(face = "bold"),
-      legend.text = element_text(colour = "black"),
-      plot.title = element_text(face = "bold", hjust = 0, size = base_size + 3),
-      plot.subtitle = element_text(face = "bold", hjust = 0, size = base_size - 1),
-      plot.margin = margin(8, 8, 8, 8)
+      strip.text = element_text(size = figure_pt(FIGURE_TEXT$facet),
+                                face = "bold", colour = "black"),
+      legend.title = element_text(size = figure_pt(FIGURE_TEXT$legend_title),
+                                  face = "bold"),
+      legend.text = element_text(size = figure_pt(FIGURE_TEXT$legend), colour = "black"),
+      legend.position = "bottom",
+      legend.direction = "horizontal",
+      legend.box = "vertical",
+      legend.key.size = unit(figure_pt(8), "pt"),
+      legend.spacing.y = unit(figure_pt(2), "pt"),
+      legend.box.spacing = unit(figure_pt(2), "pt"),
+      plot.title = element_text(size = figure_pt(FIGURE_TEXT$panel), face = "bold", hjust = 0),
+      plot.subtitle = element_text(size = figure_pt(FIGURE_TEXT$subtitle),
+                                   face = "bold", hjust = 0, lineheight = 1.05,
+                                   margin = margin(b = figure_pt(2))),
+      plot.title.position = "plot",
+      legend.margin = margin(0, 0, 0, 0),
+      panel.spacing = unit(figure_pt(4), "pt"),
+      plot.margin = margin(figure_pt(3), figure_pt(3), figure_pt(3), figure_pt(3))
     )
 }
 
@@ -518,7 +623,7 @@ nodes_path <- tibble(
   name = rev(path_order),
   label = name,
   type = "Microbial pathway",
-  x = 1.40,
+  x = 0.80,
   y = seq(0.95, 0.05, length.out = length(path_order))
 )
 
@@ -558,8 +663,8 @@ panel_a <- ggplot() +
     colour = "#00441B",
     linewidth = 0.4,
     fontface = "bold",
-    size = 5.2,
-    label.padding = unit(0.35, "lines")
+    size = figure_mm(7.5),
+    label.padding = unit(0.20, "lines")
   ) +
   geom_point(
     data = nodes_path,
@@ -567,35 +672,37 @@ panel_a <- ggplot() +
     shape = 21,
     fill = "#EFF3FF",
     colour = "#08519C",
-    size = 4.5,
+    size = figure_symbol(1.8),
     stroke = 0.7
   ) +
   geom_text(
     data = nodes_path,
-    aes(x = x + 0.1, y = y, label = label),
+    aes(x = x + 0.07, y = y, label = label),
     hjust = 0,
-    size = 4.1,
+    size = figure_mm(6.75),
     colour = "black"
   ) +
-  annotate("text", x = 0, y = 1.04, label = "Plant traits", colour = "#00441B", fontface = "bold", size = 5.2) +
-  annotate("text", x = 1.68, y = 1.04, label = "Microbial pathways", colour = "#08519C", fontface = "bold", size = 5.2) +
+  annotate("text", x = -0.15, y = 1.04, label = "Plant traits", hjust = 0, colour = "#00441B", fontface = "bold", size = figure_mm(8)) +
+  annotate("text", x = 0.87, y = 1.04, label = "Microbial pathways", hjust = 0, colour = "#08519C", fontface = "bold", size = figure_mm(8)) +
   scale_colour_gradient2(
     low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0,
-    limits = c(-0.8, 0.8), name = "Spearman ρ"
+    limits = c(-1, 1), breaks = c(-1, 0, 1), name = "Spearman ρ"
   ) +
-  scale_linewidth_continuous(name = "|Spearman ρ|", range = c(0.25, 1.8)) +
+  scale_linewidth_continuous(name = "|ρ|", breaks = scales::breaks_pretty(n = 2),
+                             range = figure_symbol(c(0.15, 0.65))) +
   labs(
     title = "A",
-    subtitle = "Correlation network linking microbial pathways with plant performance"
+    subtitle = "Trait–pathway correlation network"
   ) +
-  coord_cartesian(xlim = c(-0.10, 2.10), ylim = c(-0.03, 1.08), clip = "off") +
-  theme_void(base_size = 15) +
+  coord_cartesian(xlim = c(-0.30, 2.70), ylim = c(-0.02, 1.10),
+                  expand = FALSE, clip = "on") +
+  theme_void(base_size = figure_pt(FIGURE_TEXT$axis)) +
   theme(
-    plot.title = element_text(face = "bold", size = 24, hjust = 0),
-    plot.subtitle = element_text(face = "bold", size = 14, hjust = 0),
+    plot.title = element_text(face = "bold", size = figure_pt(FIGURE_TEXT$panel), hjust = 0),
+    plot.subtitle = element_text(face = "bold", size = figure_pt(FIGURE_TEXT$subtitle), hjust = 0),
     legend.position = "bottom",
-    legend.title = element_text(face = "bold", size = 12),
-    legend.text = element_text(size = 11),
+    legend.title = element_text(face = "bold", size = figure_pt(FIGURE_TEXT$legend_title)),
+    legend.text = element_text(size = figure_pt(FIGURE_TEXT$legend)),
     plot.margin = margin(8, 8, 8, 8)
   )
 
@@ -609,7 +716,7 @@ panel_b <- ggplot(
   geom_vline(xintercept = 0, linewidth = 0.4, linetype = "dashed", colour = "grey50") +
   geom_point(
     position = position_dodge(width = 0.55),
-    size = 3.8,
+    size = figure_symbol(1.7),
     alpha = 0.95
   ) +
   scale_colour_manual(
@@ -621,27 +728,27 @@ panel_b <- ggplot(
   ) +
   scale_x_continuous(
     limits = c(-0.9, 0.9),
-    breaks = seq(-0.8, 0.8, 0.4)
+    breaks = c(-0.8, 0, 0.8)
   ) +
   labs(
     title = "B",
-    subtitle = "Treatment-level associations between plant traits and microbial pathways",
-    x = "Spearman rho",
+    subtitle = "Trait–pathway associations",
+    x = "Spearman ρ",
     y = "Microbial pathways"
   ) +
-  theme_natcom(15) +
+  theme_natcom() +
   theme(
     panel.background = element_blank(),
     plot.background  = element_blank(),
     panel.grid       = element_blank(),
-    axis.text.y = element_text(size = 12, colour = "black"),
-    axis.text.x = element_text(size = 12, colour = "black"),
-    axis.title.x = element_text(size = 14, face = "bold"),
-    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.y = element_text(size = figure_pt(FIGURE_TEXT$axis), colour = "black"),
+    axis.text.x = element_text(size = figure_pt(FIGURE_TEXT$axis), colour = "black"),
+    axis.title.x = element_text(size = figure_pt(FIGURE_TEXT$axis_title), face = "bold"),
+    axis.title.y = element_text(size = figure_pt(FIGURE_TEXT$axis_title), face = "bold"),
     legend.position = "right",
-    legend.title = element_text(size = 13, face = "bold"),
-    legend.text = element_text(size = 12),
-    plot.subtitle = element_text(size = 13, face = "bold"),
+    legend.title = element_text(size = figure_pt(FIGURE_TEXT$legend_title), face = "bold"),
+    legend.text = element_text(size = figure_pt(FIGURE_TEXT$legend)),
+    plot.subtitle = element_text(size = figure_pt(FIGURE_TEXT$subtitle), face = "bold"),
     plot.margin = margin(8, 8, 8, 8)
   )
 
@@ -691,96 +798,91 @@ if (!all(file.exists(concept_nodes$icon_path))) {
   )
 }
 
+# Smaller detail text and shorter boxes leave more room for larger icons.
+# These are the original five steps, icon files and scientific descriptions.
+concept_nodes <- concept_nodes %>%
+  mutate(x = seq(0.10, 0.90, length.out = 5))
 arrow_df <- tibble(
-  x = concept_nodes$x[-nrow(concept_nodes)] + 0.085,
-  xend = concept_nodes$x[-1] - 0.085,
-  y = 0.55,
-  yend = 0.55
+  x = concept_nodes$x[-nrow(concept_nodes)] + 0.082,
+  xend = concept_nodes$x[-1] - 0.082,
+  y = 0.54, yend = 0.54
 )
-
-panel_c <- ggplot() +
+concept_body <- cowplot::ggdraw(clip = "on") +
   geom_segment(
     data = arrow_df,
     aes(x = x, xend = xend, y = y, yend = yend),
-    arrow = arrow(length = unit(0.22, "inches")),
-    linewidth = 0.9,
-    colour = "black"
-  ) +
-  geom_text(
-    data = concept_nodes,
-    aes(x = x, y = 0.87, label = title, colour = col),
-    fontface = "bold",
-    size = 5.0,
-    lineheight = 0.95,
-    show.legend = FALSE
-  ) +
-  ggimage::geom_image(
-    data = concept_nodes,
-    aes(x = x, y = y_icon, image = icon_path),
-    size = 0.40,
-    asp = 1
-  ) +
-  geom_label(
-    data = concept_nodes,
-    aes(x = x, y = y_box, label = detail, colour = col, fill = fill),
-    fontface = "bold",
-    size = 4.2,
-    lineheight = 0.90,
-    linewidth = 0.35,
-    label.padding = unit(0.55, "lines"),
-    show.legend = FALSE
-  ) +
-  scale_colour_identity() +
-  scale_fill_identity() +
-  labs(
-    title = "C",
-    subtitle = "Conceptual model: 6-PP seed coating enhances drought recovery via microbiome functions"
-  ) +
-  coord_cartesian(
-    xlim = c(0.01, 0.99),
-    ylim = c(0.02, 0.98),
-    clip = "off"
-  ) +
-  theme_void(base_size = 15) +
-  theme(
-    plot.title = element_text(face = "bold", size = 24, hjust = 0),
-    plot.subtitle = element_text(face = "bold", size = 15, hjust = 0),
-    plot.margin = margin(8, 8, 8, 8)
+    arrow = grid::arrow(length = unit(figure_pt(6), "pt"), type = "closed"),
+    linewidth = 0.55, colour = "black", inherit.aes = FALSE
   )
+for (i in seq_len(nrow(concept_nodes))) {
+  node <- concept_nodes[i, ]
+  concept_body <- concept_body +
+    cowplot::draw_label(
+      stringr::str_wrap(stringr::str_squish(node$title), width = 16),
+      x = node$x, y = 0.97, vjust = 1, hjust = 0.5,
+      size = figure_pt(8), fontface = "bold", color = node$col, lineheight = 1.0
+    ) +
+    cowplot::draw_image(
+      node$icon_path, x = node$x - 0.0775, y = 0.37,
+      width = 0.155, height = 0.34, hjust = 0, vjust = 0
+    ) +
+    cowplot::draw_grob(
+      grid::rectGrob(gp = grid::gpar(fill = node$fill, col = node$col, lwd = 0.8)),
+      x = node$x - 0.095, y = 0.015, width = 0.19, height = 0.34
+    ) +
+    cowplot::draw_label(
+      stringr::str_wrap(stringr::str_squish(node$detail), width = 25),
+      x = node$x, y = 0.342, vjust = 1, hjust = 0.5,
+      size = figure_pt(6.25), fontface = "plain", color = node$col, lineheight = 1.0
+    )
+}
+concept_header <- cowplot::ggdraw() +
+  cowplot::draw_label("C", x = 0.015, y = 0.75, hjust = 0,
+                     size = figure_pt(FIGURE_TEXT$panel), fontface = "bold") +
+  cowplot::draw_label("Conceptual model of drought recovery", x = 0.015, y = 0.25, hjust = 0,
+                     size = figure_pt(FIGURE_TEXT$subtitle), fontface = "bold")
+panel_c <- cowplot::plot_grid(concept_header, concept_body, ncol = 1,
+                              rel_heights = c(0.45, 2.15))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 10. Assemble Figure 5
 # ─────────────────────────────────────────────────────────────────────────────
 
-top <- cowplot::plot_grid(panel_a, panel_b, nrow = 1, rel_widths = c(1.20, 1.10))
-
-fig5 <- cowplot::plot_grid(
-  top,
-  panel_c,
-  ncol = 1,
-  rel_heights = c(1.15, 0.75)
+# Original arrangement: network A beside association plot B, with model C below.
+# All sixteen pathways remain. Smaller labels free space for both plot interiors.
+panel_a <- panel_a +
+  theme(legend.position = "bottom", legend.box = "horizontal", legend.direction = "horizontal",
+    legend.margin = margin(0, 0, 0, 0), plot.title.position = "plot",
+    plot.margin = margin(figure_pt(3), figure_pt(3), figure_pt(3), figure_pt(3))) +
+  guides(
+    colour = guide_colourbar(direction = "horizontal", title.position = "top", order = 1,
+      barwidth = unit(figure_pt(45), "pt"), barheight = unit(figure_pt(5), "pt")),
+    linewidth = guide_legend(nrow = 1, title.position = "top", order = 2)
+  )
+network_legend <- figure_legend(panel_a)
+panel_b <- panel_b +
+  theme(legend.position = "bottom", legend.direction = "horizontal", legend.box = "horizontal",
+    axis.title.y = element_blank(),
+    axis.text.y = element_text(size = figure_pt(6.75), lineheight = 0.95),
+    plot.margin = margin(figure_pt(3), figure_pt(3), figure_pt(3), figure_pt(3))) +
+  guides(colour = guide_legend(nrow = 1, title.position = "left"))
+association_legend <- figure_legend(panel_b)
+top_body <- cowplot::plot_grid(
+  panel_a + theme(legend.position = "none"),
+  panel_b + theme(legend.position = "none"),
+  nrow = 1, rel_widths = c(1, 1)
 )
+top_legends <- cowplot::plot_grid(network_legend, association_legend, nrow = 1,
+                                 rel_widths = c(1, 1))
+top <- cowplot::plot_grid(top_body, top_legends, ncol = 1,
+                          rel_heights = c(2.95, 0.45))
+fig5 <- cowplot::plot_grid(top, panel_c, ncol = 1, rel_heights = c(3.40, 2.60))
 
 # Save
 
-ggsave(
-  file.path(fig5_dir, "Figure5_NatCom_linking.pdf"),
-  fig5,
-  width = 22,
-  height = 14,
-  useDingbats = FALSE,
-  limitsize = FALSE
-)
+save_manuscript_figure(fig5, fig5_dir, "Figure5_NatCom_linking")
 
-ggsave(
-  file.path(fig5_dir, "Figure5_NatCom_linking.png"),
-  fig5,
-  width = 22,
-  height = 14,
-  dpi = 600,
-  bg = "white", 
-  limitsize = FALSE
-)
+
 
 message("Figure 5 saved to: ", fig5_dir)
 message("Correlation subset: Water = ", paste(analysis_water, collapse = ", "),
